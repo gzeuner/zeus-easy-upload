@@ -14,13 +14,8 @@ CREATED_PATH = "CREATED_ISSUES.md"
 TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
 REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "").strip()  # owner/repo
 API_BASE = os.environ.get("GITHUB_API_URL", "https://api.github.com").strip()
-
-if not TOKEN:
-    raise SystemExit("ERROR: GITHUB_TOKEN missing")
-if not REPO_SLUG or "/" not in REPO_SLUG:
-    raise SystemExit("ERROR: GITHUB_REPOSITORY missing or invalid (expected owner/repo)")
-
-OWNER, REPO = REPO_SLUG.split("/", 1)
+OWNER = ""
+REPO = ""
 
 def api_request(method: str, path: str, data=None):
     url = f"{API_BASE}{path}"
@@ -60,29 +55,84 @@ def ensure_label(name: str, color: str, description: str):
     else:
         raise SystemExit(f"ERROR: label create failed ({status}) {name}: {resp}")
 
-def parse_roadmap():
-    if not os.path.exists(ROADMAP_PATH):
-        raise SystemExit(f"ERROR: {ROADMAP_PATH} not found")
+def _extract_backtick_labels(text: str):
+    return [m.group(1).strip() for m in re.finditer(r"`([^`]+)`", text or "") if m.group(1).strip()]
 
-    text = open(ROADMAP_PATH, "r", encoding="utf-8").read()
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
+def _read_text_with_fallback(path: str) -> str:
+    for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
 
+def parse_roadmap_title_labels_body_format(text: str):
     pattern = re.compile(
         r"TITLE:\s*\n(?P<title>.+?)\n\s*\n"
         r"LABELS:\s*\n(?P<labels>.+?)\n\s*\n"
         r"BODY:\s*\n(?P<body>.*?)(?=\nTITLE:\s*\n|\Z)",
         re.DOTALL,
     )
-
     issues = []
     for m in pattern.finditer(text):
         title = m.group("title").strip()
         labels = [x.strip() for x in m.group("labels").split(",") if x.strip()]
         body = m.group("body").strip()
         issues.append({"title": title, "labels": labels, "body": body})
+    return issues
+
+def parse_roadmap_markdown_format(text: str):
+    issues = []
+
+    epic_match = re.search(
+        r"^##\s+Epic.*?$.*?^###\s+Title\s*$\n(?P<title>.+?)\n+^###\s+Labels\s*$\n(?P<labels>.+?)\n+^###\s+Description\s*$\n(?P<body>.*?)(?=^##\s+Issue Backlog\s*$|\Z)",
+        text,
+        re.DOTALL | re.MULTILINE,
+    )
+    if epic_match:
+        issues.append(
+            {
+                "title": epic_match.group("title").strip(),
+                "labels": _extract_backtick_labels(epic_match.group("labels")),
+                "body": epic_match.group("body").strip(),
+            }
+        )
+
+    backlog_match = re.search(r"^##\s+Issue Backlog\s*$\n(?P<body>.*)$", text, re.DOTALL | re.MULTILINE)
+    if not backlog_match:
+        return issues
+
+    item_pattern = re.compile(
+        r"^###\s+\d+\)\s+(?P<title>.+?)\n(?P<body>.*?)(?=^###\s+\d+\)\s+|\Z)",
+        re.DOTALL | re.MULTILINE,
+    )
+    for item in item_pattern.finditer(backlog_match.group("body")):
+        block = item.group("body").strip()
+        labels_line = re.search(r"^Labels:\s*(?P<labels>.+?)\s*$", block, re.MULTILINE)
+        labels = _extract_backtick_labels(labels_line.group("labels")) if labels_line else []
+        issues.append({"title": item.group("title").strip(), "labels": labels, "body": block})
+
+    return issues
+
+def parse_roadmap():
+    if not os.path.exists(ROADMAP_PATH):
+        raise SystemExit(f"ERROR: {ROADMAP_PATH} not found")
+
+    text = _read_text_with_fallback(ROADMAP_PATH)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    issues = parse_roadmap_markdown_format(text)
+    if not issues:
+        issues = parse_roadmap_title_labels_body_format(text)
 
     if not issues:
-        raise SystemExit("ERROR: No issue blocks parsed. Check V2_ROADMAP.md format.")
+        raise SystemExit(
+            "ERROR: No issue blocks parsed from V2_ROADMAP.md. Supported formats:\n"
+            "1) Markdown style with '## Epic' + '## Issue Backlog'\n"
+            "2) Legacy TITLE/LABELS/BODY blocks."
+        )
     return issues
 
 def create_issue(title: str, body: str, labels):
@@ -95,6 +145,13 @@ def create_issue(title: str, body: str, labels):
     return resp
 
 def main():
+    global OWNER, REPO
+    if not TOKEN:
+        raise SystemExit("ERROR: GITHUB_TOKEN missing")
+    if not REPO_SLUG or "/" not in REPO_SLUG:
+        raise SystemExit("ERROR: GITHUB_REPOSITORY missing or invalid (expected owner/repo)")
+    OWNER, REPO = REPO_SLUG.split("/", 1)
+
     # Fail fast to avoid duplicates
     if os.path.exists(CREATED_PATH) and os.path.getsize(CREATED_PATH) > 50:
         raise SystemExit(
@@ -161,7 +218,7 @@ def main():
     lines.append(f"## Epic\n- #{epic_number} {epic_url}\n")
     lines.append("## Issues\n")
     for c in created[1:]:
-        lines.append(f"- #{c['number']} {c['url']} — {c['title']}")
+        lines.append(f"- #{c['number']} {c['url']} - {c['title']}")
     lines.append("")
 
     with open(CREATED_PATH, "w", encoding="utf-8") as f:
