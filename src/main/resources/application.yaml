@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    driver-class-name: com.ibm.as400.access.AS400JDBCDriver
+    url: jdbc:as400://system/bib;translate binary=true
+    username: user
+    password: pass
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+app:
+  default-library: BIB
+  sample-rows: 200
+  batch-size: 500
+
+logging:
+  level:
+    com.zeus.upload: INFO
