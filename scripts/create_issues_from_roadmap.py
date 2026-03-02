@@ -22,6 +22,7 @@ if not REPO_SLUG or "/" not in REPO_SLUG:
 
 OWNER, REPO = REPO_SLUG.split("/", 1)
 
+
 def api_request(method: str, path: str, data=None):
     url = f"{API_BASE}{path}"
     headers = {
@@ -40,12 +41,13 @@ def api_request(method: str, path: str, data=None):
             body = resp.read().decode("utf-8")
             return resp.status, json.loads(body) if body else None
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8")
+        body = e.read().decode("utf-8", errors="replace")
         try:
             parsed = json.loads(body) if body else None
         except Exception:
             parsed = body
         return e.code, parsed
+
 
 def ensure_label(name: str, color: str, description: str):
     status, resp = api_request(
@@ -56,17 +58,49 @@ def ensure_label(name: str, color: str, description: str):
     if status in (200, 201):
         print(f"Label created: {name}")
     elif status == 422:
+        # Already exists
         print(f"Label exists: {name}")
     else:
         raise SystemExit(f"ERROR: label create failed ({status}) {name}: {resp}")
+
+
+def _read_text_with_fallback(path: str) -> str:
+    """
+    Read text file robustly across typical Windows/legacy encodings.
+    Tries UTF-8 (with BOM), then UTF-8, then Windows-1252, then Latin-1.
+    """
+    for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+
+    # Last resort: replace invalid chars
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
 
 def parse_roadmap():
     if not os.path.exists(ROADMAP_PATH):
         raise SystemExit(f"ERROR: {ROADMAP_PATH} not found")
 
-    text = open(ROADMAP_PATH, "r", encoding="utf-8").read()
+    text = _read_text_with_fallback(ROADMAP_PATH)
+
+    # Normalize line endings
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
+    # Parse blocks:
+    # TITLE:
+    # <title>
+    #
+    # LABELS:
+    # <comma separated>
+    #
+    # BODY:
+    # <multi-line...>
+    #
+    # Next TITLE: starts next block
     pattern = re.compile(
         r"TITLE:\s*\n(?P<title>.+?)\n\s*\n"
         r"LABELS:\s*\n(?P<labels>.+?)\n\s*\n"
@@ -82,17 +116,23 @@ def parse_roadmap():
         issues.append({"title": title, "labels": labels, "body": body})
 
     if not issues:
-        raise SystemExit("ERROR: No issue blocks parsed. Check V2_ROADMAP.md format.")
+        raise SystemExit(
+            "ERROR: No issue blocks parsed. Check V2_ROADMAP.md format.\n"
+            "Expected repeated blocks with TITLE:/LABELS:/BODY: sections."
+        )
     return issues
+
 
 def create_issue(title: str, body: str, labels):
     payload = {"title": title, "body": body}
     if labels:
         payload["labels"] = labels
+
     status, resp = api_request("POST", f"/repos/{OWNER}/{REPO}/issues", payload)
     if status not in (200, 201):
         raise SystemExit(f"ERROR: issue create failed ({status}): {resp}")
     return resp
+
 
 def main():
     # Fail fast to avoid duplicates
@@ -132,6 +172,7 @@ def main():
             epic = it
         else:
             rest.append(it)
+
     if epic is None:
         raise SystemExit("ERROR: No epic found (needs label 'epic' in LABELS).")
 
@@ -141,25 +182,40 @@ def main():
     epic_url = epic_resp["html_url"]
     print(f"Epic created: #{epic_number} {epic_url}")
 
-    created = [{"number": epic_number, "title": epic["title"], "url": epic_url, "labels": epic["labels"]}]
+    created = [
+        {
+            "number": epic_number,
+            "title": epic["title"],
+            "url": epic_url,
+            "labels": epic["labels"],
+        }
+    ]
 
     print("== Creating remaining issues ==")
     for it in rest:
         body = it["body"].replace("#<EPIC>", f"#{epic_number}")
-        if "Part of:" in body:
-            body = body.replace("Part of: #<EPIC>", f"Part of: #{epic_number}")
+        body = body.replace("Part of: #<EPIC>", f"Part of: #{epic_number}")
+
         resp = create_issue(it["title"], body, it["labels"])
-        created.append({"number": resp["number"], "title": it["title"], "url": resp["html_url"], "labels": it["labels"]})
+        created.append(
+            {
+                "number": resp["number"],
+                "title": it["title"],
+                "url": resp["html_url"],
+                "labels": it["labels"],
+            }
+        )
         print(f"Created: #{resp['number']} {resp['html_url']}")
 
     print("== Writing CREATED_ISSUES.md ==")
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
     lines = []
-    lines.append(f"# Created Issues (V2)\n")
+    lines.append("# Created Issues (V2)\n")
     lines.append(f"- Repository: `{OWNER}/{REPO}`")
     lines.append(f"- Created at (UTC): {now}\n")
-    lines.append(f"## Epic\n- #{epic_number} {epic_url}\n")
-    lines.append("## Issues\n")
+    lines.append("## Epic")
+    lines.append(f"- #{epic_number} {epic_url}\n")
+    lines.append("## Issues")
     for c in created[1:]:
         lines.append(f"- #{c['number']} {c['url']} — {c['title']}")
     lines.append("")
@@ -168,6 +224,7 @@ def main():
         f.write("\n".join(lines))
 
     print("Done.")
+
 
 if __name__ == "__main__":
     main()
