@@ -35,6 +35,22 @@
                             <input class="form-check-input" type="checkbox" id="dropAndRecreate" name="dropAndRecreate">
                             <label class="form-check-label" for="dropAndRecreate">Drop table before create</label>
                         </div>
+                        <div class="card border-0 bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="mb-3">Existing table (optional)</h6>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="useExistingTable" name="useExistingTable" value="true">
+                                    <label class="form-check-label" for="useExistingTable">Use existing DB2 table metadata</label>
+                                </div>
+                                <div class="mb-2">
+                                    <label for="existingTableSelect" class="form-label">Existing table</label>
+                                    <select class="form-select" id="existingTableSelect" name="existingTableName" disabled>
+                                        <option value="">Select table...</option>
+                                    </select>
+                                </div>
+                                <div id="existingTableStatus" class="form-text"></div>
+                            </div>
+                        </div>
                         <button type="submit" class="btn btn-primary">Upload and Analyze</button>
                     </form>
                 </div>
@@ -42,5 +58,69 @@
         </div>
     </div>
 </div>
+<script>
+    (() => {
+        const libraryInput = document.getElementById("library");
+        const useExistingTable = document.getElementById("useExistingTable");
+        const existingTableSelect = document.getElementById("existingTableSelect");
+        const status = document.getElementById("existingTableStatus");
+
+        if (!libraryInput || !useExistingTable || !existingTableSelect || !status) {
+            return;
+        }
+
+        const resetSelect = (message) => {
+            existingTableSelect.innerHTML = "<option value=''>Select table...</option>";
+            existingTableSelect.disabled = true;
+            status.textContent = message || "";
+        };
+
+        const fillSelect = (tables) => {
+            existingTableSelect.innerHTML = "<option value=''>Select table...</option>";
+            tables.forEach((table) => {
+                const option = document.createElement("option");
+                option.value = table.tableName;
+                option.textContent = table.tableName;
+                existingTableSelect.appendChild(option);
+            });
+            existingTableSelect.disabled = tables.length === 0;
+            status.textContent = tables.length === 0 ? "No tables found for this library." : "";
+        };
+
+        const fetchTables = async () => {
+            if (!useExistingTable.checked) {
+                resetSelect("");
+                return;
+            }
+
+            const library = libraryInput.value.trim();
+            if (!library) {
+                resetSelect("Enter a library first.");
+                return;
+            }
+
+            status.textContent = "Loading tables...";
+            try {
+                const response = await fetch(`/meta/tables?library=${encodeURIComponent(library)}`);
+                if (!response.ok) {
+                    throw new Error("Metadata endpoint returned " + response.status);
+                }
+                const tables = await response.json();
+                fillSelect(Array.isArray(tables) ? tables : []);
+            } catch (error) {
+                resetSelect("Could not load tables.");
+            }
+        };
+
+        useExistingTable.addEventListener("change", fetchTables);
+        libraryInput.addEventListener("change", () => {
+            if (useExistingTable.checked) {
+                fetchTables();
+            }
+        });
+
+        resetSelect("");
+    })();
+</script>
 </body>
 </html>

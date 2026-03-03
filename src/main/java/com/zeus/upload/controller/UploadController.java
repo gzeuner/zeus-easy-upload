@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.SessionAttributes;
 import org.springframework.web.bind.support.SessionStatus;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.util.StringUtils;
 
 @Controller
 @SessionAttributes("previewContext")
@@ -64,6 +65,8 @@ public class UploadController {
             @RequestParam("library") String library,
             @RequestParam("tableName") String tableName,
             @RequestParam(value = "dropAndRecreate", defaultValue = "false") boolean dropAndRecreate,
+            @RequestParam(value = "useExistingTable", defaultValue = "false") boolean useExistingTable,
+            @RequestParam(value = "existingTableName", required = false) String existingTableName,
             @ModelAttribute("previewContext") PreviewContext previewContext,
             Model model,
             RedirectAttributes redirectAttributes
@@ -79,6 +82,10 @@ public class UploadController {
             request.setLibrary(library);
             request.setTableName(tableName);
             request.setDropAndRecreate(dropAndRecreate);
+            request.setUseExistingTable(useExistingTable);
+            if (useExistingTable && StringUtils.hasText(existingTableName)) {
+                request.setExistingTableName(existingTableName.trim());
+            }
             request.setColumns(copyColumns(parsed.getProposals()));
 
             previewContext.setParsedCsv(parsed);
