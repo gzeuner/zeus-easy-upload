@@ -1,11 +1,16 @@
 name: Create Issues from V2_ROADMAP
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      allow_duplicates:
+        description: "Allow creating issues even if Epic already exists"
+        required: false
+        default: "false"
 
 permissions:
   issues: write
-  contents: write
+  contents: read
 
 jobs:
   create_issues:
@@ -26,15 +31,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_API_URL: https://api.github.com
+          ALLOW_DUPLICATES: ${{ github.event.inputs.allow_duplicates }}
         run: |
           python scripts/create_issues_from_roadmap.py
 
-      - name: Commit CREATED_ISSUES.md
-        run: |
-          if [ -f CREATED_ISSUES.md ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add CREATED_ISSUES.md
-            git commit -m "docs: record created issues" || echo "Nothing to commit"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
+      - name: Upload CREATED_ISSUES.md artifact
+        if: ${{ hashFiles('CREATED_ISSUES.md') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: created-issues-${{ github.run_number }}
+          path: CREATED_ISSUES.md
+          if-no-files-found: error

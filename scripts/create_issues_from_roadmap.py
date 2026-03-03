@@ -14,6 +14,8 @@ CREATED_PATH = "CREATED_ISSUES.md"
 TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
 REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "").strip()  # owner/repo
 API_BASE = os.environ.get("GITHUB_API_URL", "https://api.github.com").strip()
+ALLOW_DUPLICATES = os.environ.get("ALLOW_DUPLICATES", "false").lower() == "true"
+STEP_SUMMARY_PATH = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
 OWNER = ""
 REPO = ""
 
@@ -35,12 +37,18 @@ def api_request(method: str, path: str, data=None):
             body = resp.read().decode("utf-8")
             return resp.status, json.loads(body) if body else None
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8")
+        body = e.read().decode("utf-8", errors="replace")
         try:
             parsed = json.loads(body) if body else None
         except Exception:
             parsed = body
         return e.code, parsed
+
+def write_step_summary(markdown: str):
+    if not STEP_SUMMARY_PATH:
+        return
+    with open(STEP_SUMMARY_PATH, "a", encoding="utf-8") as f:
+        f.write(markdown.rstrip() + "\n")
 
 def ensure_label(name: str, color: str, description: str):
     status, resp = api_request(
@@ -144,6 +152,66 @@ def create_issue(title: str, body: str, labels):
         raise SystemExit(f"ERROR: issue create failed ({status}): {resp}")
     return resp
 
+def find_existing_epic_by_title(epic_title: str):
+    status, resp = api_request(
+        "GET",
+        f"/repos/{OWNER}/{REPO}/issues?state=all&labels=epic&per_page=100",
+    )
+    if status != 200:
+        raise SystemExit(f"ERROR: failed to query existing epic issues ({status}): {resp}")
+    for issue in (resp or []):
+        if issue.get("pull_request"):
+            continue
+        if issue.get("title", "").strip() == epic_title.strip():
+            return issue
+    return None
+
+def write_created_issues_file(created, repo_slug: str):
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    epic = created[0]
+    lines = []
+    lines.append("# Created Issues (V2)\n")
+    lines.append(f"- Repository: `{repo_slug}`")
+    lines.append(f"- Created at (UTC): {now}\n")
+    lines.append(f"## Epic\n- #{epic['number']} {epic['url']}\n")
+    lines.append("## Issues\n")
+    for c in created[1:]:
+        lines.append(f"- #{c['number']} {c['url']} - {c['title']}")
+    lines.append("")
+    with open(CREATED_PATH, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+def write_skip_file(reason: str, repo_slug: str, epic_number: int = None, epic_url: str = None):
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    lines = []
+    lines.append("# Created Issues (V2)\n")
+    lines.append(f"- Repository: `{repo_slug}`")
+    lines.append(f"- Created at (UTC): {now}")
+    lines.append(f"- Status: Skipped ({reason})\n")
+    if epic_number is not None and epic_url:
+        lines.append("## Epic")
+        lines.append(f"- #{epic_number} {epic_url}\n")
+    with open(CREATED_PATH, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+def write_success_summary(created):
+    epic = created[0]
+    lines = []
+    lines.append("## Created Issues (V2)")
+    lines.append(f"Epic: [#{epic['number']}]({epic['url']})")
+    for c in created[1:]:
+        lines.append(f"- [#{c['number']}]({c['url']}) - {c['title']}")
+    write_step_summary("\n".join(lines))
+
+def write_skip_summary(epic_number: int, epic_url: str):
+    lines = []
+    lines.append("## Created Issues (V2)")
+    lines.append(
+        f"Skipped: Epic already exists ([#{epic_number}]({epic_url})). "
+        "Set `allow_duplicates=true` to override."
+    )
+    write_step_summary("\n".join(lines))
+
 def main():
     global OWNER, REPO
     if not TOKEN:
@@ -152,12 +220,35 @@ def main():
         raise SystemExit("ERROR: GITHUB_REPOSITORY missing or invalid (expected owner/repo)")
     OWNER, REPO = REPO_SLUG.split("/", 1)
 
-    # Fail fast to avoid duplicates
-    if os.path.exists(CREATED_PATH) and os.path.getsize(CREATED_PATH) > 50:
-        raise SystemExit(
-            f"ERROR: {CREATED_PATH} already exists and is non-empty. "
-            "Refusing to create duplicate issues."
-        )
+    if os.path.exists(CREATED_PATH) and os.path.getsize(CREATED_PATH) > 50 and not ALLOW_DUPLICATES:
+        print(f"SKIP: {CREATED_PATH} already exists and is non-empty (ALLOW_DUPLICATES=false).")
+        write_step_summary("## Created Issues (V2)\nSkipped: Existing CREATED_ISSUES.md detected.")
+        return
+
+    print("== Parsing roadmap ==")
+    issues = parse_roadmap()
+    print(f"Parsed {len(issues)} blocks")
+
+    # Epic first (label contains 'epic')
+    epic = None
+    rest = []
+    for it in issues:
+        if any(l.lower() == "epic" for l in it["labels"]) and epic is None:
+            epic = it
+        else:
+            rest.append(it)
+    if epic is None:
+        raise SystemExit("ERROR: No epic found (needs label 'epic' in LABELS).")
+
+    print("== Checking duplicate epic via API ==")
+    existing_epic = find_existing_epic_by_title(epic["title"])
+    if existing_epic and not ALLOW_DUPLICATES:
+        existing_number = existing_epic["number"]
+        existing_url = existing_epic["html_url"]
+        print(f"SKIP: Epic already exists: #{existing_number} {existing_url}")
+        write_skip_file("Epic already exists", REPO_SLUG, existing_number, existing_url)
+        write_skip_summary(existing_number, existing_url)
+        return
 
     labels_to_create = [
         ("epic", "6f42c1", "Epic"),
@@ -177,21 +268,6 @@ def main():
     for name, color, desc in labels_to_create:
         ensure_label(name, color, desc)
 
-    print("== Parsing roadmap ==")
-    issues = parse_roadmap()
-    print(f"Parsed {len(issues)} blocks")
-
-    # Epic first (label contains 'epic')
-    epic = None
-    rest = []
-    for it in issues:
-        if any(l.lower() == "epic" for l in it["labels"]) and epic is None:
-            epic = it
-        else:
-            rest.append(it)
-    if epic is None:
-        raise SystemExit("ERROR: No epic found (needs label 'epic' in LABELS).")
-
     print("== Creating epic ==")
     epic_resp = create_issue(epic["title"], epic["body"], epic["labels"])
     epic_number = epic_resp["number"]
@@ -210,19 +286,8 @@ def main():
         print(f"Created: #{resp['number']} {resp['html_url']}")
 
     print("== Writing CREATED_ISSUES.md ==")
-    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
-    lines = []
-    lines.append(f"# Created Issues (V2)\n")
-    lines.append(f"- Repository: `{OWNER}/{REPO}`")
-    lines.append(f"- Created at (UTC): {now}\n")
-    lines.append(f"## Epic\n- #{epic_number} {epic_url}\n")
-    lines.append("## Issues\n")
-    for c in created[1:]:
-        lines.append(f"- #{c['number']} {c['url']} - {c['title']}")
-    lines.append("")
-
-    with open(CREATED_PATH, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+    write_created_issues_file(created, f"{OWNER}/{REPO}")
+    write_success_summary(created)
 
     print("Done.")
 
