@@ -14,6 +14,8 @@ public class ImportRequest {
     private String tableName;
 
     private boolean dropAndRecreate;
+    private boolean useExistingTable;
+    private String existingTableName;
 
     @Valid
     private List<ColumnProposal> columns = new ArrayList<>();
@@ -40,6 +42,22 @@ public class ImportRequest {
 
     public void setDropAndRecreate(boolean dropAndRecreate) {
         this.dropAndRecreate = dropAndRecreate;
+    }
+
+    public boolean isUseExistingTable() {
+        return useExistingTable;
+    }
+
+    public void setUseExistingTable(boolean useExistingTable) {
+        this.useExistingTable = useExistingTable;
+    }
+
+    public String getExistingTableName() {
+        return existingTableName;
+    }
+
+    public void setExistingTableName(String existingTableName) {
+        this.existingTableName = existingTableName;
     }
 
     public List<ColumnProposal> getColumns() {

@@ -119,3 +119,10 @@ Optional: Screenshots von `index`, `preview`, `result` können später ergänzt 
 - Mehrere Delimiter-Profile
 - Persistente Job-Historie
 - Fehlerexport als CSV/JSON
+
+## Metadata endpoints
+
+Fuer kommende V2-Mapping-Features stellt die Anwendung zusaetzliche, read-only Metadata-Endpunkte bereit:
+
+- `/meta/tables?library=LIB`
+- `/meta/columns?library=LIB&table=TABLE`

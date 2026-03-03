@@ -22,6 +22,8 @@
     </div>
 
     <form th:action="@{/import}" th:object="${importRequest}" method="post">
+        <input type="hidden" th:field="*{useExistingTable}">
+        <input type="hidden" th:field="*{existingTableName}">
         <div class="card shadow-sm mb-3">
             <div class="card-body">
                 <div class="row">
@@ -109,8 +111,91 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-3"
+             th:if="${importRequest.useExistingTable and importRequest.existingTableName != null and !#strings.isEmpty(importRequest.existingTableName)}">
+            <div class="card-header">
+                <strong>Existing Table Metadata</strong>
+                <span class="text-muted ms-2" th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>JDBC Type</th>
+                        <th>Length</th>
+                        <th>Scale</th>
+                        <th>Nullable</th>
+                        <th>Default</th>
+                    </tr>
+                    </thead>
+                    <tbody id="existingColumnsBody"
+                           th:attr="data-library=${importRequest.library},data-table=${importRequest.existingTableName}">
+                    <tr>
+                        <td colspan="8" class="text-muted">Loading metadata...</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-success">Create Table and Import</button>
     </form>
 </div>
+<script>
+    (() => {
+        const body = document.getElementById("existingColumnsBody");
+        if (!body) {
+            return;
+        }
+
+        const library = (body.dataset.library || "").trim();
+        const table = (body.dataset.table || "").trim();
+        if (!library || !table) {
+            body.innerHTML = "<tr><td colspan='8' class='text-muted'>No existing table selected.</td></tr>";
+            return;
+        }
+
+        const renderRows = (columns) => {
+            if (!columns || columns.length === 0) {
+                body.innerHTML = "<tr><td colspan='8' class='text-muted'>No metadata columns found.</td></tr>";
+                return;
+            }
+            body.innerHTML = columns.map((column) => {
+                const ordinal = column.ordinalPosition ?? "";
+                const type = column.typeName ?? "";
+                const jdbcType = column.jdbcType ?? "";
+                const length = column.length ?? "";
+                const scale = column.scale ?? "";
+                const nullable = column.nullable ? "YES" : "NO";
+                const defaultValue = column.defaultValue ?? "";
+                return `<tr>
+                    <td>${ordinal}</td>
+                    <td>${column.columnName || ""}</td>
+                    <td>${type}</td>
+                    <td>${jdbcType}</td>
+                    <td>${length}</td>
+                    <td>${scale}</td>
+                    <td>${nullable}</td>
+                    <td>${defaultValue}</td>
+                </tr>`;
+            }).join("");
+        };
+
+        fetch(`/meta/columns?library=${encodeURIComponent(library)}&table=${encodeURIComponent(table)}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error("Metadata endpoint returned " + response.status);
+                }
+                return response.json();
+            })
+            .then((columns) => renderRows(Array.isArray(columns) ? columns : []))
+            .catch(() => {
+                body.innerHTML = "<tr><td colspan='8' class='text-danger'>Could not load metadata columns.</td></tr>";
+            });
+    })();
+</script>
 </body>
 </html>
