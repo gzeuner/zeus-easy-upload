@@ -8,7 +8,7 @@ import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
 import com.zeus.upload.domain.ParseError;
 import com.zeus.upload.domain.ParsedCsv;
-import com.zeus.upload.util.Db2IdentifierUtil;
+import com.zeus.upload.sql.SqlDialect;
 import java.math.BigDecimal;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
@@ -40,17 +40,20 @@ public class ImportService {
     private final DdlService ddlService;
     private final TypeInferenceService typeInferenceService;
     private final AppProperties appProperties;
+    private final SqlDialect sqlDialect;
 
     public ImportService(
             DataSource dataSource,
             DdlService ddlService,
             TypeInferenceService typeInferenceService,
-            AppProperties appProperties
+            AppProperties appProperties,
+            SqlDialect sqlDialect
     ) {
         this.dataSource = dataSource;
         this.ddlService = ddlService;
         this.typeInferenceService = typeInferenceService;
         this.appProperties = appProperties;
+        this.sqlDialect = sqlDialect;
     }
 
     public ImportResult importCsv(ImportRequest request, ParsedCsv parsedCsv) {
@@ -142,14 +145,12 @@ public class ImportService {
     }
 
     String buildInsertSql(String library, String tableName, List<ColumnMapping> mappings) {
-        String lib = Db2IdentifierUtil.sanitizeIdentifier(library);
-        String tbl = Db2IdentifierUtil.sanitizeIdentifier(tableName);
         List<String> targetColumns = mappings.stream()
                 .map(ColumnMapping::getTargetColumn)
-                .map(Db2IdentifierUtil::sanitizeIdentifier)
+                .map(sqlDialect::quoteIdentifier)
                 .toList();
         String placeholders = String.join(", ", mappings.stream().map(m -> "?").toList());
-        return "INSERT INTO " + lib + "." + tbl
+        return "INSERT INTO " + sqlDialect.qualifyTable(library, tableName)
                 + " (" + String.join(", ", targetColumns) + ") VALUES (" + placeholders + ")";
     }
 

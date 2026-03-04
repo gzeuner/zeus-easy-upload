@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import com.zeus.upload.config.AppProperties;
 import com.zeus.upload.domain.ColumnMapping;
+import com.zeus.upload.sql.Db2iDialect;
 import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ class ExistingTableImportSqlTest {
     void shouldBuildInsertSqlWithMappedColumnOrder() {
         AppProperties properties = new AppProperties();
         DataSource dataSource = mock(DataSource.class);
-        ImportService importService = new ImportService(dataSource, null, null, properties);
+        ImportService importService = new ImportService(dataSource, null, null, properties, new Db2iDialect());
         List<ColumnMapping> mappings = List.of(
                 mapping(2, "amount", "AMOUNT"),
                 mapping(0, "id", "ID"),
@@ -24,7 +25,7 @@ class ExistingTableImportSqlTest {
 
         String sql = importService.buildInsertSql("bib", "orders", mappings);
 
-        assertThat(sql).isEqualTo("INSERT INTO BIB.ORDERS (AMOUNT, ID, CREATED_AT) VALUES (?, ?, ?)");
+        assertThat(sql).isEqualTo("INSERT INTO \"BIB\".\"ORDERS\" (\"AMOUNT\", \"ID\", \"CREATED_AT\") VALUES (?, ?, ?)");
     }
 
     private ColumnMapping mapping(int csvIndex, String csvColumn, String targetColumn) {

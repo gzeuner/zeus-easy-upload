@@ -1,8 +1,8 @@
 package com.zeus.upload.service;
 
 import com.zeus.upload.domain.ColumnProposal;
+import com.zeus.upload.sql.SqlDialect;
 import com.zeus.upload.util.ColumnNameSanitizer;
-import com.zeus.upload.util.Db2IdentifierUtil;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -13,14 +13,14 @@ import org.springframework.stereotype.Service;
 public class DdlService {
 
     private final ColumnNameSanitizer columnNameSanitizer;
+    private final SqlDialect sqlDialect;
 
-    public DdlService(ColumnNameSanitizer columnNameSanitizer) {
+    public DdlService(ColumnNameSanitizer columnNameSanitizer, SqlDialect sqlDialect) {
         this.columnNameSanitizer = columnNameSanitizer;
+        this.sqlDialect = sqlDialect;
     }
 
     public String createTableSql(String library, String table, List<ColumnProposal> columns) {
-        String lib = Db2IdentifierUtil.sanitizeIdentifier(library);
-        String tbl = Db2IdentifierUtil.sanitizeIdentifier(table);
         List<String> definitions = new ArrayList<>();
         Set<String> used = new HashSet<>();
 
@@ -31,24 +31,26 @@ public class DdlService {
                     ColumnNameSanitizer.MAX_COLUMN_LENGTH
             );
             column.setFinalName(finalName);
-            definitions.add(finalName + " " + resolveTypeDefinition(column) + (column.isNullable() ? "" : " NOT NULL"));
+            definitions.add(sqlDialect.quoteIdentifier(finalName) + " "
+                    + resolveTypeDefinition(column)
+                    + (column.isNullable() ? "" : " NOT NULL"));
         }
 
-        return "CREATE TABLE " + lib + "." + tbl + " (" + String.join(", ", definitions) + ")";
+        return "CREATE TABLE " + sqlDialect.qualifyTable(library, table) + " (" + String.join(", ", definitions) + ")";
     }
 
     public String dropTableSql(String library, String table) {
-        String lib = Db2IdentifierUtil.sanitizeIdentifier(library);
-        String tbl = Db2IdentifierUtil.sanitizeIdentifier(table);
-        return "DROP TABLE " + lib + "." + tbl;
+        return "DROP TABLE " + sqlDialect.qualifyTable(library, table);
     }
 
     public String insertSql(String library, String table, List<ColumnProposal> columns) {
-        String lib = Db2IdentifierUtil.sanitizeIdentifier(library);
-        String tbl = Db2IdentifierUtil.sanitizeIdentifier(table);
-        List<String> names = columns.stream().map(ColumnProposal::getFinalName).toList();
+        List<String> names = columns.stream()
+                .map(ColumnProposal::getFinalName)
+                .map(sqlDialect::quoteIdentifier)
+                .toList();
         String placeholders = String.join(", ", columns.stream().map(c -> "?").toList());
-        return "INSERT INTO " + lib + "." + tbl + " (" + String.join(", ", names) + ") VALUES (" + placeholders + ")";
+        return "INSERT INTO " + sqlDialect.qualifyTable(library, table)
+                + " (" + String.join(", ", names) + ") VALUES (" + placeholders + ")";
     }
 
     private String resolveTypeDefinition(ColumnProposal column) {
