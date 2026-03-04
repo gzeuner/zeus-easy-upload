@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:zeus_easy_upload_test;MODE=DB2;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: never
