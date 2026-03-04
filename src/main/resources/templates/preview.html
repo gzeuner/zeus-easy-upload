@@ -9,7 +9,7 @@
 <body class="bg-light">
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">Preview and Type Mapping</h3>
+        <h3 class="mb-0">Preview and Mapping</h3>
         <a class="btn btn-outline-secondary" th:href="@{/}">Back</a>
     </div>
 
@@ -21,9 +21,24 @@
         </ul>
     </div>
 
+    <div th:if="${mappingErrors != null and !mappingErrors.isEmpty()}" class="alert alert-danger">
+        <h6>Mapping Errors</h6>
+        <ul class="mb-0">
+            <li th:each="err : ${mappingErrors}" th:text="${err}"></li>
+        </ul>
+    </div>
+
+    <div th:if="${mappingWarnings != null and !mappingWarnings.isEmpty()}" class="alert alert-warning">
+        <h6>Mapping Warnings</h6>
+        <ul class="mb-0">
+            <li th:each="warn : ${mappingWarnings}" th:text="${warn}"></li>
+        </ul>
+    </div>
+
     <form th:action="@{/import}" th:object="${importRequest}" method="post">
         <input type="hidden" th:field="*{useExistingTable}">
         <input type="hidden" th:field="*{existingTableName}">
+
         <div class="card shadow-sm mb-3">
             <div class="card-body">
                 <div class="row">
@@ -35,17 +50,23 @@
                         <label class="form-label">Table Name</label>
                         <input class="form-control" th:field="*{tableName}" required>
                     </div>
-                    <div class="col-md-4 d-flex align-items-end mb-3">
+                    <div class="col-md-4 d-flex align-items-end mb-3" th:if="${!importRequest.useExistingTable}">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" th:field="*{dropAndRecreate}">
                             <label class="form-check-label">Drop table before create</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end mb-3" th:if="${importRequest.useExistingTable}">
+                        <div class="text-muted small">
+                            Existing table import enabled:
+                            <span th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card shadow-sm mb-3">
+        <div class="card shadow-sm mb-3" th:if="${!importRequest.useExistingTable}">
             <div class="card-header"><strong>Column Proposals</strong></div>
             <div class="table-responsive">
                 <table class="table table-sm table-striped mb-0">
@@ -93,13 +114,95 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-3" th:if="${importRequest.useExistingTable}">
+            <div class="card-header">
+                <strong>Auto-Mapping to Existing Table</strong>
+                <span class="text-muted ms-2" th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>CSV Column</th>
+                        <th>Target DB Column</th>
+                        <th>Ignore</th>
+                        <th>Status</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="mapping, stat : *{mappings}">
+                        <td th:text="${mapping.csvIndex + 1}"></td>
+                        <td>
+                            <input type="hidden" th:field="*{mappings[__${stat.index}__].csvColumn}">
+                            <input type="hidden" th:field="*{mappings[__${stat.index}__].csvIndex}">
+                            <input type="hidden" th:field="*{mappings[__${stat.index}__].note}">
+                            <span th:text="${mapping.csvColumn}"></span>
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm" th:field="*{mappings[__${stat.index}__].targetColumn}">
+                                <option value="">-- unmapped --</option>
+                                <option th:each="dbColumn : ${dbColumns}"
+                                        th:value="${dbColumn.columnName}"
+                                        th:text="${dbColumn.columnName}"></option>
+                            </select>
+                        </td>
+                        <td class="text-center">
+                            <input class="form-check-input" type="checkbox" th:field="*{mappings[__${stat.index}__].ignored}">
+                        </td>
+                        <td>
+                            <span th:if="${mapping.ignored}" class="badge text-bg-secondary">Ignored</span>
+                            <span th:if="${!mapping.ignored and #strings.isEmpty(mapping.targetColumn)}"
+                                  class="badge text-bg-warning">Unmapped</span>
+                            <span th:if="${!mapping.ignored and !#strings.isEmpty(mapping.targetColumn)}"
+                                  class="badge text-bg-success">Mapped</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3" th:if="${importRequest.useExistingTable}">
+            <div class="card-header"><strong>Target Table Columns</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Length</th>
+                        <th>Scale</th>
+                        <th>Nullable</th>
+                        <th>Default</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:if="${dbColumns == null or dbColumns.isEmpty()}">
+                        <td colspan="7" class="text-muted">No metadata columns found.</td>
+                    </tr>
+                    <tr th:each="dbColumn : ${dbColumns}">
+                        <td th:text="${dbColumn.ordinalPosition}"></td>
+                        <td th:text="${dbColumn.columnName}"></td>
+                        <td th:text="${dbColumn.typeName}"></td>
+                        <td th:text="${dbColumn.length}"></td>
+                        <td th:text="${dbColumn.scale}"></td>
+                        <td th:text="${dbColumn.nullable ? 'YES' : 'NO'}"></td>
+                        <td th:text="${dbColumn.defaultValue}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="card shadow-sm mb-3">
             <div class="card-header"><strong>CSV Preview (first 20 rows)</strong></div>
             <div class="table-responsive">
                 <table class="table table-sm table-bordered mb-0">
                     <thead>
                     <tr>
-                        <th th:each="col : *{columns}" th:text="${col.originalName}"></th>
+                        <th th:each="col : ${previewContext.parsedCsv.originalHeaders}" th:text="${col}"></th>
                     </tr>
                     </thead>
                     <tbody>
@@ -111,91 +214,9 @@
             </div>
         </div>
 
-        <div class="card shadow-sm mb-3"
-             th:if="${importRequest.useExistingTable and importRequest.existingTableName != null and !#strings.isEmpty(importRequest.existingTableName)}">
-            <div class="card-header">
-                <strong>Existing Table Metadata</strong>
-                <span class="text-muted ms-2" th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-striped mb-0">
-                    <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Column</th>
-                        <th>Type</th>
-                        <th>JDBC Type</th>
-                        <th>Length</th>
-                        <th>Scale</th>
-                        <th>Nullable</th>
-                        <th>Default</th>
-                    </tr>
-                    </thead>
-                    <tbody id="existingColumnsBody"
-                           th:attr="data-library=${importRequest.library},data-table=${importRequest.existingTableName}">
-                    <tr>
-                        <td colspan="8" class="text-muted">Loading metadata...</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-success">Create Table and Import</button>
+        <button th:if="${!importRequest.useExistingTable}" type="submit" class="btn btn-success">Create Table and Import</button>
+        <button th:if="${importRequest.useExistingTable}" type="submit" class="btn btn-success">Import Into Existing Table</button>
     </form>
 </div>
-<script>
-    (() => {
-        const body = document.getElementById("existingColumnsBody");
-        if (!body) {
-            return;
-        }
-
-        const library = (body.dataset.library || "").trim();
-        const table = (body.dataset.table || "").trim();
-        if (!library || !table) {
-            body.innerHTML = "<tr><td colspan='8' class='text-muted'>No existing table selected.</td></tr>";
-            return;
-        }
-
-        const renderRows = (columns) => {
-            if (!columns || columns.length === 0) {
-                body.innerHTML = "<tr><td colspan='8' class='text-muted'>No metadata columns found.</td></tr>";
-                return;
-            }
-            body.innerHTML = columns.map((column) => {
-                const ordinal = column.ordinalPosition ?? "";
-                const type = column.typeName ?? "";
-                const jdbcType = column.jdbcType ?? "";
-                const length = column.length ?? "";
-                const scale = column.scale ?? "";
-                const nullable = column.nullable ? "YES" : "NO";
-                const defaultValue = column.defaultValue ?? "";
-                return `<tr>
-                    <td>${ordinal}</td>
-                    <td>${column.columnName || ""}</td>
-                    <td>${type}</td>
-                    <td>${jdbcType}</td>
-                    <td>${length}</td>
-                    <td>${scale}</td>
-                    <td>${nullable}</td>
-                    <td>${defaultValue}</td>
-                </tr>`;
-            }).join("");
-        };
-
-        fetch(`/meta/columns?library=${encodeURIComponent(library)}&table=${encodeURIComponent(table)}`)
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error("Metadata endpoint returned " + response.status);
-                }
-                return response.json();
-            })
-            .then((columns) => renderRows(Array.isArray(columns) ? columns : []))
-            .catch(() => {
-                body.innerHTML = "<tr><td colspan='8' class='text-danger'>Could not load metadata columns.</td></tr>";
-            });
-    })();
-</script>
 </body>
 </html>

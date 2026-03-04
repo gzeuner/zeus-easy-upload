@@ -1,12 +1,17 @@
 package com.zeus.upload.controller;
 
+import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.config.AppProperties;
 import com.zeus.upload.domain.ColumnProposal;
+import com.zeus.upload.domain.DbColumnMeta;
 import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
+import com.zeus.upload.domain.MappingValidationResult;
 import com.zeus.upload.domain.PreviewContext;
 import com.zeus.upload.service.CsvParsingService;
 import com.zeus.upload.service.ImportService;
+import com.zeus.upload.service.MappingService;
+import com.zeus.upload.service.MetadataService;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,11 +40,21 @@ public class UploadController {
 
     private final CsvParsingService csvParsingService;
     private final ImportService importService;
+    private final MetadataService metadataService;
+    private final MappingService mappingService;
     private final AppProperties appProperties;
 
-    public UploadController(CsvParsingService csvParsingService, ImportService importService, AppProperties appProperties) {
+    public UploadController(
+            CsvParsingService csvParsingService,
+            ImportService importService,
+            MetadataService metadataService,
+            MappingService mappingService,
+            AppProperties appProperties
+    ) {
         this.csvParsingService = csvParsingService;
         this.importService = importService;
+        this.metadataService = metadataService;
+        this.mappingService = mappingService;
         this.appProperties = appProperties;
     }
 
@@ -85,8 +100,29 @@ public class UploadController {
             request.setUseExistingTable(useExistingTable);
             if (useExistingTable && StringUtils.hasText(existingTableName)) {
                 request.setExistingTableName(existingTableName.trim());
+                if (!StringUtils.hasText(tableName)) {
+                    request.setTableName(existingTableName.trim());
+                }
             }
             request.setColumns(copyColumns(parsed.getProposals()));
+
+            if (useExistingTable && StringUtils.hasText(existingTableName)) {
+                List<DbColumnMeta> dbColumns = metadataService.listColumns(library, existingTableName);
+                List<ColumnMapping> mappings = mappingService.autoMap(parsed, dbColumns);
+                request.setMappings(copyMappings(mappings));
+                previewContext.setDbColumns(dbColumns);
+                previewContext.setMappings(copyMappings(mappings));
+                previewContext.setUseExistingTable(true);
+                previewContext.setExistingTableName(existingTableName.trim());
+                model.addAttribute("dbColumns", dbColumns);
+                model.addAttribute("mappings", mappings);
+            } else {
+                request.setUseExistingTable(false);
+                previewContext.setUseExistingTable(false);
+                previewContext.setExistingTableName(null);
+                previewContext.setDbColumns(List.of());
+                previewContext.setMappings(List.of());
+            }
 
             previewContext.setParsedCsv(parsed);
             previewContext.setOriginalFilename(file.getOriginalFilename());
@@ -95,9 +131,9 @@ public class UploadController {
             model.addAttribute("previewErrors", parsed.getParseErrors());
             model.addAttribute("supportedTypes", SUPPORTED_TYPES);
             return "preview";
-        } catch (IOException | IllegalArgumentException ex) {
-            log.warn("Upload parsing failed", ex);
-            redirectAttributes.addFlashAttribute("errorMessage", "CSV parse failed: " + ex.getMessage());
+        } catch (IOException | RuntimeException ex) {
+            log.warn("Upload preview preparation failed", ex);
+            redirectAttributes.addFlashAttribute("errorMessage", "Preview preparation failed: " + ex.getMessage());
             return "redirect:/";
         }
     }
@@ -119,10 +155,39 @@ public class UploadController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("supportedTypes", SUPPORTED_TYPES);
             model.addAttribute("previewErrors", previewContext.getParsedCsv().getParseErrors());
+            model.addAttribute("dbColumns", previewContext.getDbColumns());
+            model.addAttribute("mappings", importRequest.getMappings());
             return "preview";
         }
 
-        ImportResult result = importService.importCsv(importRequest, previewContext.getParsedCsv());
+        ImportResult result;
+        if (importRequest.isUseExistingTable()) {
+            List<DbColumnMeta> dbColumns = previewContext.getDbColumns();
+            MappingValidationResult validationResult = mappingService.validate(
+                    previewContext.getParsedCsv(),
+                    dbColumns,
+                    importRequest.getMappings()
+            );
+            if (!validationResult.isValid()) {
+                model.addAttribute("supportedTypes", SUPPORTED_TYPES);
+                model.addAttribute("previewErrors", previewContext.getParsedCsv().getParseErrors());
+                model.addAttribute("mappingErrors", validationResult.getErrors());
+                model.addAttribute("mappingWarnings", validationResult.getWarnings());
+                model.addAttribute("dbColumns", dbColumns);
+                model.addAttribute("mappings", importRequest.getMappings());
+                return "preview";
+            }
+            model.addAttribute("mappingWarnings", validationResult.getWarnings());
+            result = importService.importIntoExistingTable(
+                    importRequest.getLibrary(),
+                    importRequest.getExistingTableName(),
+                    previewContext.getParsedCsv(),
+                    dbColumns,
+                    importRequest.getMappings()
+            );
+        } else {
+            result = importService.importCsv(importRequest, previewContext.getParsedCsv());
+        }
         model.addAttribute("result", result);
         sessionStatus.setComplete();
         return "result";
@@ -144,6 +209,20 @@ public class UploadController {
             c.setPrecision(original.getPrecision());
             c.setScale(original.getScale());
             copy.add(c);
+        }
+        return copy;
+    }
+
+    private List<ColumnMapping> copyMappings(List<ColumnMapping> source) {
+        List<ColumnMapping> copy = new ArrayList<>();
+        for (ColumnMapping original : source) {
+            ColumnMapping mapping = new ColumnMapping();
+            mapping.setCsvColumn(original.getCsvColumn());
+            mapping.setCsvIndex(original.getCsvIndex());
+            mapping.setTargetColumn(original.getTargetColumn());
+            mapping.setIgnored(original.isIgnored());
+            mapping.setNote(original.getNote());
+            copy.add(mapping);
         }
         return copy;
     }

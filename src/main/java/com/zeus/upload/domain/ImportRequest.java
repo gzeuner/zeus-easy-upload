@@ -19,6 +19,7 @@ public class ImportRequest {
 
     @Valid
     private List<ColumnProposal> columns = new ArrayList<>();
+    private List<ColumnMapping> mappings = new ArrayList<>();
 
     public String getLibrary() {
         return library;
@@ -66,5 +67,13 @@ public class ImportRequest {
 
     public void setColumns(List<ColumnProposal> columns) {
         this.columns = columns;
+    }
+
+    public List<ColumnMapping> getMappings() {
+        return mappings;
+    }
+
+    public void setMappings(List<ColumnMapping> mappings) {
+        this.mappings = mappings;
     }
 }
