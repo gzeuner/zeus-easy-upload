@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -58,17 +59,29 @@ public class MappingService {
     }
 
     public MappingValidationResult validate(ParsedCsv csv, List<DbColumnMeta> dbColumns, List<ColumnMapping> mappings) {
+        return validate(csv, dbColumns, mappings, false, List.of());
+    }
+
+    public MappingValidationResult validate(
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            boolean upsertEnabled,
+            List<String> keyColumns
+    ) {
         MappingValidationResult result = new MappingValidationResult();
         List<ColumnMapping> safeMappings = mappings == null ? List.of() : mappings;
         List<DbColumnMeta> safeDbColumns = dbColumns == null ? List.of() : dbColumns;
 
         Set<String> existingColumns = new HashSet<>();
+        Map<String, DbColumnMeta> byNormalizedName = new HashMap<>();
         for (DbColumnMeta dbColumn : safeDbColumns) {
             if (!StringUtils.hasText(dbColumn.getColumnName())) {
                 continue;
             }
             String key = normalizeDbKey(dbColumn.getColumnName());
             existingColumns.add(key);
+            byNormalizedName.put(key, dbColumn);
         }
 
         Set<String> mappedDbColumns = new HashSet<>();
@@ -127,6 +140,37 @@ public class MappingService {
         for (int i = 0; i < headers.size(); i++) {
             if (!mappedCsvIndexes.contains(i) && !ignoredCsvIndexes.contains(i) && !warnedUnmappedCsvIndexes.contains(i)) {
                 result.getWarnings().add("CSV column '" + headers.get(i) + "' is unmapped.");
+            }
+        }
+
+        if (upsertEnabled) {
+            Set<String> normalizedKeys = new LinkedHashSet<>();
+            List<String> safeKeyColumns = keyColumns == null ? List.of() : keyColumns;
+            for (String keyColumn : safeKeyColumns) {
+                if (!StringUtils.hasText(keyColumn)) {
+                    continue;
+                }
+                normalizedKeys.add(normalizeDbKey(keyColumn));
+            }
+            if (normalizedKeys.isEmpty()) {
+                result.getErrors().add("At least one key column is required for upsert mode.");
+            } else {
+                for (String normalizedKey : normalizedKeys) {
+                    if (!existingColumns.contains(normalizedKey)) {
+                        result.getErrors().add("Key column '" + normalizedKey + "' does not exist in table metadata.");
+                        continue;
+                    }
+                    if (!mappedDbColumns.contains(normalizedKey)) {
+                        result.getErrors().add("Key column '" + normalizedKey + "' must be mapped and not ignored.");
+                        continue;
+                    }
+                    DbColumnMeta keyMeta = byNormalizedName.get(normalizedKey);
+                    if (keyMeta != null && keyMeta.isNullable()) {
+                        result.getWarnings().add(
+                                "Key column '" + keyMeta.getColumnName() + "' is nullable; NOT NULL keys are recommended."
+                        );
+                    }
+                }
             }
         }
 
