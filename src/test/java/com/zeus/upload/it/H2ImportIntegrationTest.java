@@ -14,6 +14,7 @@ import com.zeus.upload.service.MappingService;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -132,6 +133,46 @@ class H2ImportIntegrationTest {
 
         assertThat(validationResult.isValid()).isFalse();
         assertThat(validationResult.getErrors()).anyMatch(error -> error.contains("REQUIRED_NO_DEFAULT"));
+    }
+
+    @Test
+    @Disabled("H2 MODE=DB2 does not reliably support DB2 for i MERGE ... USING (VALUES ...) syntax.")
+    void shouldExecuteDb2StyleMergeSqlAgainstH2() {
+        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"TESTLIB\"");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS \"TESTLIB\".\"H2_MERGE_IT\"");
+        jdbcTemplate.execute("""
+                CREATE TABLE "TESTLIB"."H2_MERGE_IT" (
+                  "ID" INTEGER NOT NULL PRIMARY KEY,
+                  "NAME" VARCHAR(128) NOT NULL
+                )
+                """);
+        jdbcTemplate.execute("INSERT INTO \"TESTLIB\".\"H2_MERGE_IT\" (\"ID\", \"NAME\") VALUES (1, 'Old')");
+
+        jdbcTemplate.update("""
+                MERGE INTO "TESTLIB"."H2_MERGE_IT" AS T
+                USING (VALUES (?, ?)) AS S("ID", "NAME")
+                ON (T."ID" = S."ID")
+                WHEN MATCHED THEN UPDATE SET T."NAME" = S."NAME"
+                WHEN NOT MATCHED THEN INSERT ("ID", "NAME") VALUES (S."ID", S."NAME")
+                """, 1, "Updated");
+        jdbcTemplate.update("""
+                MERGE INTO "TESTLIB"."H2_MERGE_IT" AS T
+                USING (VALUES (?, ?)) AS S("ID", "NAME")
+                ON (T."ID" = S."ID")
+                WHEN MATCHED THEN UPDATE SET T."NAME" = S."NAME"
+                WHEN NOT MATCHED THEN INSERT ("ID", "NAME") VALUES (S."ID", S."NAME")
+                """, 2, "Inserted");
+
+        Integer rowCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM \"TESTLIB\".\"H2_MERGE_IT\"",
+                Integer.class
+        );
+        String updatedName = jdbcTemplate.queryForObject(
+                "SELECT \"NAME\" FROM \"TESTLIB\".\"H2_MERGE_IT\" WHERE \"ID\" = 1",
+                String.class
+        );
+        assertThat(rowCount).isEqualTo(2);
+        assertThat(updatedName).isEqualTo("Updated");
     }
 
     private ParsedCsv parseSampleCsv() throws IOException {

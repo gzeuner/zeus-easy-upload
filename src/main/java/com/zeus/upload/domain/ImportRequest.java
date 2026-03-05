@@ -15,7 +15,9 @@ public class ImportRequest {
 
     private boolean dropAndRecreate;
     private boolean useExistingTable;
+    private boolean upsertEnabled;
     private String existingTableName;
+    private List<String> keyColumns = new ArrayList<>();
 
     @Valid
     private List<ColumnProposal> columns = new ArrayList<>();
@@ -59,6 +61,22 @@ public class ImportRequest {
 
     public void setExistingTableName(String existingTableName) {
         this.existingTableName = existingTableName;
+    }
+
+    public boolean isUpsertEnabled() {
+        return upsertEnabled;
+    }
+
+    public void setUpsertEnabled(boolean upsertEnabled) {
+        this.upsertEnabled = upsertEnabled;
+    }
+
+    public List<String> getKeyColumns() {
+        return keyColumns;
+    }
+
+    public void setKeyColumns(List<String> keyColumns) {
+        this.keyColumns = keyColumns == null ? new ArrayList<>() : new ArrayList<>(keyColumns);
     }
 
     public List<ColumnProposal> getColumns() {

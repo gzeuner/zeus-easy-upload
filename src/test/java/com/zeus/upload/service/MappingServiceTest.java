@@ -95,6 +95,42 @@ class MappingServiceTest {
         assertThat(result.getWarnings()).anyMatch(warning -> warning.contains("CSV column 'first' is unmapped"));
     }
 
+    @Test
+    void shouldFailUpsertValidationWhenNoKeyColumnsProvided() {
+        ParsedCsv csv = parsedCsvWithHeaders("id", "name");
+        List<DbColumnMeta> dbColumns = List.of(
+                dbColumn("ID", false, null),
+                dbColumn("NAME", true, null)
+        );
+        List<ColumnMapping> mappings = List.of(
+                mapping(0, "id", "ID", false),
+                mapping(1, "name", "NAME", false)
+        );
+
+        MappingValidationResult result = service.validate(csv, dbColumns, mappings, true, List.of());
+
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(error -> error.contains("At least one key column"));
+    }
+
+    @Test
+    void shouldFailUpsertValidationWhenKeyColumnIsNotMapped() {
+        ParsedCsv csv = parsedCsvWithHeaders("id", "name");
+        List<DbColumnMeta> dbColumns = List.of(
+                dbColumn("ID", false, null),
+                dbColumn("NAME", true, null)
+        );
+        List<ColumnMapping> mappings = List.of(
+                mapping(0, "id", "", false),
+                mapping(1, "name", "NAME", false)
+        );
+
+        MappingValidationResult result = service.validate(csv, dbColumns, mappings, true, List.of("ID"));
+
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(error -> error.contains("must be mapped"));
+    }
+
     private ParsedCsv parsedCsvWithHeaders(String... headers) {
         ParsedCsv csv = new ParsedCsv();
         csv.getOriginalHeaders().addAll(List.of(headers));

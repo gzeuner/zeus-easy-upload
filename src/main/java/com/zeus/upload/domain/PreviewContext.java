@@ -8,9 +8,11 @@ public class PreviewContext {
     private ParsedCsv parsedCsv;
     private String originalFilename;
     private boolean useExistingTable;
+    private boolean upsertEnabled;
     private String existingTableName;
     private List<DbColumnMeta> dbColumns = new ArrayList<>();
     private List<ColumnMapping> mappings = new ArrayList<>();
+    private List<String> keyColumns = new ArrayList<>();
 
     public ParsedCsv getParsedCsv() {
         return parsedCsv;
@@ -44,6 +46,14 @@ public class PreviewContext {
         this.existingTableName = existingTableName;
     }
 
+    public boolean isUpsertEnabled() {
+        return upsertEnabled;
+    }
+
+    public void setUpsertEnabled(boolean upsertEnabled) {
+        this.upsertEnabled = upsertEnabled;
+    }
+
     public List<DbColumnMeta> getDbColumns() {
         return dbColumns;
     }
@@ -58,5 +68,13 @@ public class PreviewContext {
 
     public void setMappings(List<ColumnMapping> mappings) {
         this.mappings = mappings;
+    }
+
+    public List<String> getKeyColumns() {
+        return keyColumns;
+    }
+
+    public void setKeyColumns(List<String> keyColumns) {
+        this.keyColumns = keyColumns == null ? new ArrayList<>() : new ArrayList<>(keyColumns);
     }
 }

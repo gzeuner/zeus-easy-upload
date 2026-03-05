@@ -105,6 +105,8 @@ public class UploadController {
                 }
             }
             request.setColumns(copyColumns(parsed.getProposals()));
+            request.setUpsertEnabled(false);
+            request.setKeyColumns(List.of());
 
             if (useExistingTable && StringUtils.hasText(existingTableName)) {
                 List<DbColumnMeta> dbColumns = metadataService.listColumns(library, existingTableName);
@@ -114,14 +116,18 @@ public class UploadController {
                 previewContext.setMappings(copyMappings(mappings));
                 previewContext.setUseExistingTable(true);
                 previewContext.setExistingTableName(existingTableName.trim());
+                previewContext.setUpsertEnabled(false);
+                previewContext.setKeyColumns(List.of());
                 model.addAttribute("dbColumns", dbColumns);
                 model.addAttribute("mappings", mappings);
             } else {
                 request.setUseExistingTable(false);
                 previewContext.setUseExistingTable(false);
                 previewContext.setExistingTableName(null);
+                previewContext.setUpsertEnabled(false);
                 previewContext.setDbColumns(List.of());
                 previewContext.setMappings(List.of());
+                previewContext.setKeyColumns(List.of());
             }
 
             previewContext.setParsedCsv(parsed);
@@ -166,7 +172,9 @@ public class UploadController {
             MappingValidationResult validationResult = mappingService.validate(
                     previewContext.getParsedCsv(),
                     dbColumns,
-                    importRequest.getMappings()
+                    importRequest.getMappings(),
+                    importRequest.isUpsertEnabled(),
+                    importRequest.getKeyColumns()
             );
             if (!validationResult.isValid()) {
                 model.addAttribute("supportedTypes", SUPPORTED_TYPES);
@@ -178,13 +186,24 @@ public class UploadController {
                 return "preview";
             }
             model.addAttribute("mappingWarnings", validationResult.getWarnings());
-            result = importService.importIntoExistingTable(
-                    importRequest.getLibrary(),
-                    importRequest.getExistingTableName(),
-                    previewContext.getParsedCsv(),
-                    dbColumns,
-                    importRequest.getMappings()
-            );
+            if (importRequest.isUpsertEnabled()) {
+                result = importService.upsertIntoExistingTable(
+                        importRequest.getLibrary(),
+                        importRequest.getExistingTableName(),
+                        previewContext.getParsedCsv(),
+                        dbColumns,
+                        importRequest.getMappings(),
+                        importRequest.getKeyColumns()
+                );
+            } else {
+                result = importService.importIntoExistingTable(
+                        importRequest.getLibrary(),
+                        importRequest.getExistingTableName(),
+                        previewContext.getParsedCsv(),
+                        dbColumns,
+                        importRequest.getMappings()
+                );
+            }
         } else {
             result = importService.importCsv(importRequest, previewContext.getParsedCsv());
         }

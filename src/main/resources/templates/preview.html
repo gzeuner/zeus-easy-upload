@@ -63,6 +63,24 @@
                         </div>
                     </div>
                 </div>
+                <div class="row" th:if="${importRequest.useExistingTable}">
+                    <div class="col-md-4 mb-3">
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" th:field="*{upsertEnabled}">
+                            <label class="form-check-label">Upsert (MERGE) instead of INSERT</label>
+                        </div>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">Key Columns</label>
+                        <input type="hidden" name="keyColumns" value="">
+                        <select class="form-select" th:field="*{keyColumns}" multiple size="6">
+                            <option th:each="dbColumn : ${dbColumns}"
+                                    th:value="${dbColumn.columnName}"
+                                    th:text="${dbColumn.columnName + (dbColumn.nullable ? ' (nullable)' : '')}"></option>
+                        </select>
+                        <div class="form-text">Keys must uniquely identify a row.</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -215,7 +233,8 @@
         </div>
 
         <button th:if="${!importRequest.useExistingTable}" type="submit" class="btn btn-success">Create Table and Import</button>
-        <button th:if="${importRequest.useExistingTable}" type="submit" class="btn btn-success">Import Into Existing Table</button>
+        <button th:if="${importRequest.useExistingTable}" type="submit" class="btn btn-success"
+                th:text="${importRequest.upsertEnabled} ? 'Upsert Into Existing Table' : 'Import Into Existing Table'">Import Into Existing Table</button>
     </form>
 </div>
 </body>
