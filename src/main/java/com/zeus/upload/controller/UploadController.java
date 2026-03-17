@@ -1,7 +1,5 @@
 package com.zeus.upload.controller;
 
-import com.zeus.upload.connector.db.DbTableTargetConnector;
-import com.zeus.upload.connector.file.CsvSourceConnector;
 import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.config.AppProperties;
 import com.zeus.upload.domain.ColumnProposal;
@@ -10,9 +8,9 @@ import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
 import com.zeus.upload.domain.MappingValidationResult;
 import com.zeus.upload.domain.PreviewContext;
-import com.zeus.upload.flow.DataFlow;
+import com.zeus.upload.flow.FlowConfigurationFactory;
+import com.zeus.upload.flow.FlowExecutionService;
 import com.zeus.upload.service.CsvParsingService;
-import com.zeus.upload.service.ImportService;
 import com.zeus.upload.service.MappingService;
 import com.zeus.upload.service.MetadataService;
 import jakarta.validation.Valid;
@@ -42,23 +40,26 @@ public class UploadController {
     private static final List<String> SUPPORTED_TYPES = List.of("INTEGER", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "VARCHAR");
 
     private final CsvParsingService csvParsingService;
-    private final ImportService importService;
     private final MetadataService metadataService;
     private final MappingService mappingService;
     private final AppProperties appProperties;
+    private final FlowConfigurationFactory flowConfigurationFactory;
+    private final FlowExecutionService flowExecutionService;
 
     public UploadController(
             CsvParsingService csvParsingService,
-            ImportService importService,
             MetadataService metadataService,
             MappingService mappingService,
-            AppProperties appProperties
+            AppProperties appProperties,
+            FlowConfigurationFactory flowConfigurationFactory,
+            FlowExecutionService flowExecutionService
     ) {
         this.csvParsingService = csvParsingService;
-        this.importService = importService;
         this.metadataService = metadataService;
         this.mappingService = mappingService;
         this.appProperties = appProperties;
+        this.flowConfigurationFactory = flowConfigurationFactory;
+        this.flowExecutionService = flowExecutionService;
     }
 
     @ModelAttribute("previewContext")
@@ -189,24 +190,17 @@ public class UploadController {
                 return "preview";
             }
             model.addAttribute("mappingWarnings", validationResult.getWarnings());
-            result = executeConnectorFlow(importRequest, previewContext, dbColumns);
+            result = executeConfiguredFlow(importRequest, previewContext);
         } else {
-            result = executeConnectorFlow(importRequest, previewContext, List.of());
+            result = executeConfiguredFlow(importRequest, previewContext);
         }
         model.addAttribute("result", result);
         sessionStatus.setComplete();
         return "result";
     }
 
-    private ImportResult executeConnectorFlow(
-            ImportRequest importRequest,
-            PreviewContext previewContext,
-            List<DbColumnMeta> dbColumns
-    ) {
-        CsvSourceConnector source = new CsvSourceConnector(previewContext.getParsedCsv());
-        DbTableTargetConnector target = new DbTableTargetConnector(importService, importRequest, dbColumns);
-        new DataFlow(source, target).execute();
-        return target.getResult();
+    private ImportResult executeConfiguredFlow(ImportRequest importRequest, PreviewContext previewContext) {
+        return flowExecutionService.execute(flowConfigurationFactory.fromImportContext(importRequest, previewContext));
     }
 
     private List<ColumnProposal> copyColumns(List<ColumnProposal> source) {

@@ -30,6 +30,7 @@ Aktueller First-Class-Flow:
 Minimale Architektur in der aktuellen Iteration:
 
 - `SourceConnector -> DataFlow -> TargetConnector`
+- `FlowConfiguration` beschreibt den aktuellen Source-/Target-Aufbau neutral
 - `CsvSourceConnector` liest das bereits bewaehrte `ParsedCsv`
 - `DbTableTargetConnector` delegiert weiterhin an die bestehende `ImportService`-Logik
 

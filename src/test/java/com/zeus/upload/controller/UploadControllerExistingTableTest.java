@@ -13,8 +13,9 @@ import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.domain.ColumnProposal;
 import com.zeus.upload.domain.DbColumnMeta;
 import com.zeus.upload.domain.ParsedCsv;
+import com.zeus.upload.flow.FlowConfigurationFactory;
+import com.zeus.upload.flow.FlowExecutionService;
 import com.zeus.upload.service.CsvParsingService;
-import com.zeus.upload.service.ImportService;
 import com.zeus.upload.service.MappingService;
 import com.zeus.upload.service.MetadataService;
 import java.util.List;
@@ -35,9 +36,6 @@ class UploadControllerExistingTableTest {
     private CsvParsingService csvParsingService;
 
     @MockBean
-    private ImportService importService;
-
-    @MockBean
     private MetadataService metadataService;
 
     @MockBean
@@ -45,6 +43,12 @@ class UploadControllerExistingTableTest {
 
     @MockBean
     private AppProperties appProperties;
+
+    @MockBean
+    private FlowConfigurationFactory flowConfigurationFactory;
+
+    @MockBean
+    private FlowExecutionService flowExecutionService;
 
     @Test
     void uploadShouldRenderPreviewWithMappingsForExistingTableMode() throws Exception {

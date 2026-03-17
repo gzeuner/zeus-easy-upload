@@ -1,28 +1,27 @@
 package com.zeus.upload.connector.db;
 
-import com.zeus.upload.connector.TargetConnector;
-import com.zeus.upload.domain.DbColumnMeta;
+import com.zeus.upload.connector.ImportResultAwareTargetConnector;
 import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
 import com.zeus.upload.domain.ParsedCsv;
+import com.zeus.upload.flow.DbTableTargetConfiguration;
+import com.zeus.upload.flow.DbTableWriteMode;
 import com.zeus.upload.flow.DataRecord;
 import com.zeus.upload.service.ImportService;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-public class DbTableTargetConnector implements TargetConnector {
+public class DbTableTargetConnector implements ImportResultAwareTargetConnector {
 
     private final ImportService importService;
-    private final ImportRequest importRequest;
-    private final List<DbColumnMeta> dbColumns;
+    private final DbTableTargetConfiguration configuration;
 
     private ImportResult result;
 
-    public DbTableTargetConnector(ImportService importService, ImportRequest importRequest, List<DbColumnMeta> dbColumns) {
+    public DbTableTargetConnector(ImportService importService, DbTableTargetConfiguration configuration) {
         this.importService = Objects.requireNonNull(importService, "importService must not be null");
-        this.importRequest = Objects.requireNonNull(importRequest, "importRequest must not be null");
-        this.dbColumns = dbColumns == null ? List.of() : List.copyOf(dbColumns);
+        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
     }
 
     @Override
@@ -30,39 +29,53 @@ public class DbTableTargetConnector implements TargetConnector {
         ParsedCsv parsedCsv = new ParsedCsv();
         records.map(this::toRow).forEach(parsedCsv.getRows()::add);
 
-        if (!importRequest.isUseExistingTable()) {
-            result = importService.importCsv(importRequest, parsedCsv);
+        if (configuration.getWriteMode() == DbTableWriteMode.CREATE_TABLE) {
+            result = importService.importCsv(createImportRequest(), parsedCsv);
             return;
         }
 
-        if (importRequest.isUpsertEnabled()) {
+        if (configuration.getWriteMode() == DbTableWriteMode.UPSERT_EXISTING) {
             result = importService.upsertIntoExistingTable(
-                    importRequest.getLibrary(),
-                    importRequest.getExistingTableName(),
+                    configuration.getLibrary(),
+                    configuration.getTableName(),
                     parsedCsv,
-                    dbColumns,
-                    importRequest.getMappings(),
-                    importRequest.getKeyColumns()
+                    configuration.getDbColumns(),
+                    configuration.getMappings(),
+                    configuration.getKeyColumns()
             );
             return;
         }
 
         result = importService.importIntoExistingTable(
-                importRequest.getLibrary(),
-                importRequest.getExistingTableName(),
+                configuration.getLibrary(),
+                configuration.getTableName(),
                 parsedCsv,
-                dbColumns,
-                importRequest.getMappings()
+                configuration.getDbColumns(),
+                configuration.getMappings()
         );
     }
 
-    public ImportResult getResult() {
+    @Override
+    public ImportResult getImportResult() {
         return result;
+    }
+
+    public ImportResult getResult() {
+        return getImportResult();
     }
 
     private List<String> toRow(DataRecord record) {
         return record.asMap().values().stream()
                 .map(value -> value == null ? null : String.valueOf(value))
                 .toList();
+    }
+
+    private ImportRequest createImportRequest() {
+        ImportRequest importRequest = new ImportRequest();
+        importRequest.setLibrary(configuration.getLibrary());
+        importRequest.setTableName(configuration.getTableName());
+        importRequest.setDropAndRecreate(configuration.isDropAndRecreate());
+        importRequest.setColumns(configuration.getColumns());
+        return importRequest;
     }
 }

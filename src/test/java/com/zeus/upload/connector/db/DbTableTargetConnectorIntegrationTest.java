@@ -5,10 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.zeus.upload.connector.file.CsvSourceConnector;
 import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.domain.DbColumnMeta;
-import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
 import com.zeus.upload.domain.ParsedCsv;
 import com.zeus.upload.flow.DataFlow;
+import com.zeus.upload.flow.DbTableTargetConfiguration;
+import com.zeus.upload.flow.DbTableWriteMode;
 import com.zeus.upload.service.CsvParsingService;
 import com.zeus.upload.service.ImportService;
 import java.io.IOException;
@@ -50,20 +51,23 @@ class DbTableTargetConnectorIntegrationTest {
                 """);
 
         ParsedCsv parsedCsv = parseSampleCsv();
-        ImportRequest request = new ImportRequest();
-        request.setLibrary(LIBRARY);
-        request.setTableName("H2_CONNECTOR_IMPORT_IT");
-        request.setUseExistingTable(true);
-        request.setExistingTableName("H2_CONNECTOR_IMPORT_IT");
-        request.setMappings(mappingsForHeaders(parsedCsv.getOriginalHeaders()));
-
         List<DbColumnMeta> dbColumns = List.of(
                 new DbColumnMeta("ID", "INTEGER", java.sql.Types.INTEGER, 10, 10, 0, false, null, 1),
                 new DbColumnMeta("NAME", "VARCHAR", java.sql.Types.VARCHAR, 128, 128, 0, false, null, 2),
                 new DbColumnMeta("SOURCE", "VARCHAR", java.sql.Types.VARCHAR, 20, 20, 0, false, "'CSV'", 3)
         );
+        DbTableTargetConfiguration configuration = new DbTableTargetConfiguration(
+                LIBRARY,
+                "H2_CONNECTOR_IMPORT_IT",
+                DbTableWriteMode.INSERT_EXISTING,
+                false,
+                List.of(),
+                mappingsForHeaders(parsedCsv.getOriginalHeaders()),
+                List.of(),
+                dbColumns
+        );
 
-        DbTableTargetConnector target = new DbTableTargetConnector(importService, request, dbColumns);
+        DbTableTargetConnector target = new DbTableTargetConnector(importService, configuration);
         new DataFlow(new CsvSourceConnector(parsedCsv), target).execute();
         ImportResult result = target.getResult();
 

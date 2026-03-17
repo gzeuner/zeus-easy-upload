@@ -46,6 +46,7 @@ The active architecture priority is to add a minimal connector seam without brea
 - CSV source connector
 - DB target connector
 - Adapt current CSV -> DB execution to `DataFlow`
+- Connector configuration model (`#44`)
 
 ### Planned: Multi-connector roadmap
 
@@ -70,9 +71,9 @@ This track is intentionally ahead of broader platform features because it create
 
 ### Proposed work items
 
-- `#42` Connector architecture foundation (SourceConnector/TargetConnector)
-- `#43` Neutral record model + flow execution seam
-- `#44` Connector configuration model
+- `#42` Connector architecture foundation (SourceConnector/TargetConnector) - implemented on this branch
+- `#43` Neutral record model + flow execution seam - implemented on this branch
+- `#44` Connector configuration model - implemented on this branch
 - `#45` DB source connector
 - `#46` CSV target/export connector
 - `#47` Protocol connector foundations (FTP/SFTP/REST/filesystem)
