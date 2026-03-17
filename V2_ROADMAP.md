@@ -1,286 +1,159 @@
 # V2 Roadmap
 
-`gh` is not available in this environment. Create GitHub issues manually from the definitions below.
+## Product Direction
 
-## Epic (P1)
+`zeus-easy-upload` is no longer just a CSV-to-DB prototype. The current application already supports:
 
-### Title
-V2: Produktiv-Workflow (Mapping + Upsert + Async + API + Profiles)
+- Spring Boot UI flow
+- CSV parsing and preview
+- create-table import into DB2/400
+- existing-table imports with auto-mapping
+- DB metadata lookup
+- MERGE-based upsert
+- H2-backed integration testing with minimal SQL-dialect groundwork
 
-### Labels
-`epic`, `enhancement`, `import`, `priority:P1`
+The next step is not a rewrite. The next step is to introduce a connector architecture foundation so the product can evolve from a CSV import tool into a multi-connector data transfer toolkit.
 
-### Description
-Goal:
-- Enable production-grade CSV import workflows: mapping to existing tables, upsert, async progress, REST API, reusable profiles.
+Current first-class supported flow:
 
-Scope (In):
-- Auto-map CSV columns to existing DB2/400 table columns
-- Upsert via DB2/400 MERGE based on selectable key columns
-- Save/load import profiles (mapping + settings)
-- Async imports with progress tracking and UI progress bar
-- REST API endpoints mirroring the GUI workflow
+- CSV -> DB table
 
-Scope (Out):
-- AuthN/AuthZ beyond minimal/basic protection
-- Complex transformations (derive columns, joins)
-- CSV validation rules engine (beyond type parsing + required columns)
+Target architecture:
 
-Work items (Issues):
-- [ ] Feature: Auto-Mapping auf bestehende Tabellen
-- [ ] Feature: Upsert via MERGE (DB2/400)
-- [ ] Feature: Import-Profile speichern & laden
-- [ ] Feature: Async Import mit Progress-Bar (UI)
-- [ ] Feature: REST API zusätzlich zur GUI
-- [ ] Tech: DB2/400 Metadata Service kapseln (DatabaseMetaData)
-- [ ] Tech: Import Job Tracking + Progress Persistence
-- [ ] Tech: Fehlerreport Export (CSV/JSON Download)
-- [ ] Tech: Integrations-Test-Setup (Profile "it") + Doku IBM i
-- [ ] Feature/Tech: CSV Settings Optionen (Encoding/Delimiter/Quote)
+- `SourceConnector -> DataFlow -> TargetConnector`
 
-Epic acceptance criteria:
-- [ ] All listed work items are implemented and documented
-- [ ] A full end-to-end run is possible: upload -> preview/mapping -> async import -> progress -> result/errors via UI and API
-- [ ] Upsert mode updates existing keys and inserts new ones correctly
-- [ ] Profiles can be saved and reused to repeat the same import setup
+## Status Overview
 
-## Issue Backlog
+### Done: CSV-to-DB foundation
 
-### 1) Auto-Mapping auf bestehende Tabellen (Feature, P1)
-Labels: `enhancement`, `db2`, `import`, `ui`, `priority:P1`
-Part of: `#<EPIC>`
+- `#3` Auto-Mapping auf bestehende Tabellen
+- `#4` Upsert via MERGE (DB2/400)
+- `#8` DB2/400 Metadata Service kapseln (DatabaseMetaData)
+- `#38` Test infra: H2 in-memory integration tests + minimal SQL dialect scaffold
 
-Problem / Value:
-- Users need to import into existing DB2/400 tables without recreating them, while ensuring correct column mapping and type compatibility.
+These items stay done. They are enabling work for the connector direction and should not be reopened.
 
-Scope (In):
-- UI option: "Use existing table" (instead of "Create new table")
-- List tables by library/schema using DatabaseMetaData
-- Read columns (name, type, length, precision, scale, nullable)
-- Mapping UI: CSV column -> DB column dropdown; allow "ignore"
-- Preflight validation: required (non-null) columns must be mapped; no duplicate target mapping
+### In Progress: Architecture evolution
 
-Scope (Out):
-- Automatic schema migrations / altering existing columns
-- Advanced transformations (concats, computed columns)
+The active architecture priority is to add a minimal connector seam without breaking the existing workflow.
 
-Acceptance criteria:
-- [ ] UI allows selecting an existing table from a library/schema
-- [ ] UI shows DB columns and allows mapping each CSV column to exactly one DB column (or ignore)
-- [ ] Validation prevents start if any NOT NULL DB columns are unmapped and have no default
-- [ ] Import uses mapping to insert/update correct target columns
-- [ ] A sample import into an existing table completes with correct values
+- Analysis of current implementation and migration path
+- Connector architecture foundation
+- Neutral record model
+- Source connector abstraction
+- Target connector abstraction
+- Flow execution model
+- CSV source connector
+- DB target connector
+- Adapt current CSV -> DB execution to `DataFlow`
+- Connector configuration model (`#44`)
 
-Notes:
-- Implement metadata access via a dedicated MetadataService.
+### Planned: Multi-connector roadmap
 
-### 2) Upsert via MERGE (DB2/400) (Feature, P1)
-Labels: `enhancement`, `db2`, `import`, `api`, `ui`, `priority:P1`
-Part of: `#<EPIC>`
+After the minimal connector seam is in place, planned expansion areas are:
 
-Problem / Value:
-- Insert-only is not enough for recurring imports. Need UPSERT based on key columns.
+- connector configuration model
+- DB source connector
+- CSV target/export connector
+- filesystem connector
+- FTP connector foundation
+- SFTP connector foundation
+- REST connector foundation
+- cloud/object storage connector foundation
 
-Scope (In):
-- UI/REST option: Mode INSERT_ONLY vs UPSERT
-- User selects one or more key columns (DB columns) for match condition
-- Implement MERGE INTO <LIB>.<TABLE> ... ON (keys) WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...
-- Batch approach or per-row MERGE (choose pragmatic for v1): correctness first
+## Track A: Connector Architecture
 
-Scope (Out):
-- Complex conflict resolution policies
-- Partial updates based on changed fields only (optional later)
+This track is intentionally ahead of broader platform features because it creates the seam needed for future source/target combinations.
 
-Acceptance criteria:
-- [ ] In UPSERT mode, rows with existing keys are updated, new keys inserted
-- [ ] Keys selection supports 1..n columns
-- [ ] Transaction rollback on failure, with clear error message including row/column
-- [ ] Works via both GUI flow and REST API
-- [ ] Document DB2/400 MERGE limitations/assumptions in README
+### Epic
 
-### 3) Import-Profile speichern & laden (Feature, P2)
-Labels: `enhancement`, `import`, `ui`, `priority:P2`
-Part of: `#<EPIC>`
+- `#41` Connector Architecture: Multi-connector flow foundation
 
-Problem / Value:
-- Repeated imports require redoing mapping/settings each time; profiles make workflows repeatable.
+### Proposed work items
 
-Scope (In):
-- Profile contains: targetLibrary, tableName, mode (insert/upsert), key columns, CSV settings (delimiter/quote/encoding), mapping (csv->db), type overrides (when create mode)
-- UI: Save profile, Load profile, Delete profile
-- Storage: start with DB table (preferred) OR JSON files under a configurable folder
+- `#42` Connector architecture foundation (SourceConnector/TargetConnector) - implemented on this branch
+- `#43` Neutral record model + flow execution seam - implemented on this branch
+- `#44` Connector configuration model - implemented on this branch
+- `#45` DB source connector
+- `#46` CSV target/export connector
+- `#47` Protocol connector foundations (FTP/SFTP/REST/filesystem)
 
-Scope (Out):
-- Multi-user permission model
-- Versioned profile migrations (beyond minimal)
+### Acceptance direction
 
-Acceptance criteria:
-- [ ] User can save a profile with a name
-- [ ] User can load the profile and UI rehydrates mapping + settings
-- [ ] User can delete a profile
-- [ ] Profile persistence is documented (where stored, how to backup)
+- Existing CSV -> DB behavior still works exactly as before
+- Current implementation uses connector orchestration internally
+- New source/target combinations can be added without reworking the controller flow again
+- Existing services remain reusable implementation backbones rather than being replaced
 
-### 4) Async Import mit Progress-Bar (UI) (Feature, P2)
-Labels: `enhancement`, `ui`, `import`, `priority:P2`
-Part of: `#<EPIC>`
+## Track B: Production Workflow Backlog
 
-Problem / Value:
-- Large CSV imports should not block HTTP requests or time out; users need progress visibility.
+The existing V2 epic remains relevant, but it is no longer the only organizing track.
 
-Scope (In):
-- Start import returns a jobId
-- Background job executes import
-- Progress tracking: totalRows, processedRows, inserted, updated (if upsert), failed, status (QUEUED/RUNNING/DONE/FAILED/CANCELLED)
-- UI shows progress bar and live updates (polling acceptable)
-- Result page shows summary and errors
+### Existing Epic
 
-Scope (Out):
-- WebSockets (polling is fine for v1)
-- Distributed job queue
+- `#2` V2: Produktiv-Workflow (Mapping + Upsert + Async + API + Profiles)
 
-Acceptance criteria:
-- [ ] Import runs in background without request timeout
-- [ ] UI displays progress and updates at least every 1-2 seconds (polling)
-- [ ] On completion, UI shows final counts + errors
-- [ ] Cancel is optional; if implemented, must stop the job cleanly
+### Still open from the V2 backlog
 
-### 5) REST API zusätzlich zur GUI (Feature, P2)
-Labels: `enhancement`, `api`, `import`, `priority:P2`
-Part of: `#<EPIC>`
+- `#5` Import-Profile speichern & laden
+- `#6` Async Import mit Progress-Bar (UI)
+- `#7` REST API zusÃ¤tzlich zur GUI
+- `#9` Import Job Tracking + Progress Persistence
+- `#10` Fehlerreport Export (CSV/JSON Download)
+- `#11` Integrations-Test-Setup (Profile "it") + Doku IBM i
+- `#12` CSV Settings Optionen (Encoding/Delimiter/Quote + UI)
 
-Problem / Value:
-- Automation / integrations require a stable REST API in addition to the UI.
+### Reordering guidance
 
-Scope (In):
-- Endpoints (example):
-  - POST /api/uploads -> upload CSV, returns uploadId + inferred schema
-  - POST /api/imports -> start import, returns jobId
-  - GET /api/imports/{id} -> status/progress
-  - GET /api/imports/{id}/errors -> error report
-- JSON models align with existing domain models
-- API docs: minimal README section (OpenAPI optional)
+These items remain valid, but architecture work should happen before major expansion in:
 
-Scope (Out):
-- OAuth/JWT (optional later)
-- Multi-tenant separation
+- generic REST/API exposure
+- reusable connector configuration
+- async multi-flow execution
+- export-oriented workflows
 
-Acceptance criteria:
-- [ ] API can perform full flow: upload -> start import -> poll status -> read errors
-- [ ] API supports insert-only and upsert mode
-- [ ] Validation errors return 4xx with meaningful messages
+## Incremental Migration Path
 
-### 6) DB2/400 Metadata Service kapseln (DatabaseMetaData) (Enabler, P1)
-Labels: `tech-debt`, `db2`, `import`, `priority:P1`
-Part of: `#<EPIC>`
+### Phase 1
 
-Context:
-- Multiple features depend on robust introspection: existing tables, columns, types, nullable, defaults.
+Introduce the connector seam with minimal additive types:
 
-Scope (In):
-- Create MetadataService with methods:
-  - listLibraries/schemas (if possible)
-  - listTables(library)
-  - getColumns(library, table) -> name/type/length/precision/scale/nullable/default
-- Centralize DB2 type normalization (map JDBC types to internal representation)
+- `DataRecord`
+- `SourceConnector`
+- `TargetConnector`
+- `DataFlow`
 
-Scope (Out):
-- Caching layers (optional later)
+### Phase 2
 
-Acceptance criteria:
-- [ ] MetadataService returns correct tables/columns for a given library
-- [ ] Results are used by mapping UI and/or validation
-- [ ] Unit tests cover type normalization logic
+Wrap existing implementations instead of moving them:
 
-### 7) Import Job Tracking + Progress Persistence (Enabler, P2)
-Labels: `tech-debt`, `import`, `priority:P2`
-Part of: `#<EPIC>`
+- `CsvParsingService` stays the CSV ingestion backbone
+- `ImportService` stays the DB write backbone
+- `MappingService` and `MetadataService` stay unchanged
 
-Context:
-- Async import requires reliable progress tracking, and ideally persistence across restarts.
+### Phase 3
 
-Scope (In):
-- Define ImportJob entity with status + counters + timestamps
-- Provide InMemory implementation first, plus optional DB persistence toggle
-- Provide JobService: createJob, updateProgress, complete, fail
+Refactor only orchestration so the current flow becomes:
 
-Scope (Out):
-- Distributed lock/queue
+- CSV upload and preview
+- mapping/validation
+- `CsvSourceConnector`
+- `DataFlow`
+- `DbTableTargetConnector`
 
-Acceptance criteria:
-- [ ] Job progress is queryable via service and API
-- [ ] UI polling reads consistent progress
-- [ ] On failure, job status is FAILED with error summary
+### Phase 4
 
-### 8) Fehlerreport Export (CSV/JSON Download) (Enabler, P2)
-Labels: `enhancement`, `ui`, `api`, `import`, `priority:P2`
-Part of: `#<EPIC>`
+Add additional connectors incrementally after the seam is proven:
 
-Problem / Value:
-- Users need to download error details for troubleshooting and rework.
+- DB source
+- CSV export
+- filesystem
+- FTP/SFTP
+- REST
 
-Scope (In):
-- Provide downloadable error report:
-  - JSON (full detail)
-  - CSV (flattened: row, column, value, message)
-- UI buttons on result page
-- API endpoint for error export
+## Notes
 
-Scope (Out):
-- Pretty HTML reports
-
-Acceptance criteria:
-- [ ] After a failed import (or partial errors), user can download JSON and CSV report
-- [ ] API provides the same reports
-- [ ] Report includes jobId, timestamp, and error list
-
-### 9) Integrations-Test-Setup (Profile "it") + Doku IBM i (Enabler, P3)
-Labels: `tech-debt`, `db2`, `priority:P3`
-Part of: `#<EPIC>`
-
-Context:
-- Critical DB2/400 behaviors (MERGE, identifier limits, data types) should be verified against a real IBM i.
-
-Scope (In):
-- Add Maven profile "it" that can run integration tests when env vars are provided:
-  - IT_DB_URL, IT_DB_USER, IT_DB_PASS
-- Provide one or two smoke tests:
-  - create table (temp name)
-  - insert
-  - merge/upsert (when implemented)
-- Document in README how to run and required permissions
-
-Scope (Out):
-- CI pipeline automation (optional later)
-
-Acceptance criteria:
-- [ ] `mvn -Pit test` runs integration tests when env vars exist
-- [ ] Tests are skipped gracefully when env vars are missing
-- [ ] README contains clear instructions
-
-### 10) CSV Settings Optionen (Encoding/Delimiter/Quote + UI) (Feature/Enabler, P3)
-Labels: `enhancement`, `ui`, `import`, `priority:P3`
-Part of: `#<EPIC>`
-
-Problem / Value:
-- Real-world CSV varies widely (Excel exports). Users need control over delimiter/quote/encoding.
-
-Scope (In):
-- UI options:
-  - delimiter (comma, semicolon, tab)
-  - quote char (", ')
-  - encoding (UTF-8 default; optional ISO-8859-1, Windows-1252)
-- Optional auto-detect heuristic (nice-to-have)
-- Persist in import profile
-
-Scope (Out):
-- Full RFC edge cases (multi-line quoted fields are already handled by parser)
-
-Acceptance criteria:
-- [ ] User can set delimiter/quote/encoding before parsing
-- [ ] Parsing reflects these settings and preview matches expected
-- [ ] Settings are saved/loaded with profiles
-
-## Manual creation order
-1. Create the Epic issue first.
-2. Create issues 1-10 and set `Part of: #<EPIC_NUMBER>` in each body.
-3. Add labels exactly as listed for each issue.
+- No plugin system is planned in this phase
+- No generic runtime connector registry is planned in this phase
+- The current UI and current import behavior must remain intact
+- Existing logic should be wrapped first and only extracted further when a second real connector pair justifies it

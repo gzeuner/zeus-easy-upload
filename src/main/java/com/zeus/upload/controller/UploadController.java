@@ -8,8 +8,9 @@ import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
 import com.zeus.upload.domain.MappingValidationResult;
 import com.zeus.upload.domain.PreviewContext;
+import com.zeus.upload.flow.FlowConfigurationFactory;
+import com.zeus.upload.flow.FlowExecutionService;
 import com.zeus.upload.service.CsvParsingService;
-import com.zeus.upload.service.ImportService;
 import com.zeus.upload.service.MappingService;
 import com.zeus.upload.service.MetadataService;
 import jakarta.validation.Valid;
@@ -39,23 +40,26 @@ public class UploadController {
     private static final List<String> SUPPORTED_TYPES = List.of("INTEGER", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "VARCHAR");
 
     private final CsvParsingService csvParsingService;
-    private final ImportService importService;
     private final MetadataService metadataService;
     private final MappingService mappingService;
     private final AppProperties appProperties;
+    private final FlowConfigurationFactory flowConfigurationFactory;
+    private final FlowExecutionService flowExecutionService;
 
     public UploadController(
             CsvParsingService csvParsingService,
-            ImportService importService,
             MetadataService metadataService,
             MappingService mappingService,
-            AppProperties appProperties
+            AppProperties appProperties,
+            FlowConfigurationFactory flowConfigurationFactory,
+            FlowExecutionService flowExecutionService
     ) {
         this.csvParsingService = csvParsingService;
-        this.importService = importService;
         this.metadataService = metadataService;
         this.mappingService = mappingService;
         this.appProperties = appProperties;
+        this.flowConfigurationFactory = flowConfigurationFactory;
+        this.flowExecutionService = flowExecutionService;
     }
 
     @ModelAttribute("previewContext")
@@ -186,30 +190,17 @@ public class UploadController {
                 return "preview";
             }
             model.addAttribute("mappingWarnings", validationResult.getWarnings());
-            if (importRequest.isUpsertEnabled()) {
-                result = importService.upsertIntoExistingTable(
-                        importRequest.getLibrary(),
-                        importRequest.getExistingTableName(),
-                        previewContext.getParsedCsv(),
-                        dbColumns,
-                        importRequest.getMappings(),
-                        importRequest.getKeyColumns()
-                );
-            } else {
-                result = importService.importIntoExistingTable(
-                        importRequest.getLibrary(),
-                        importRequest.getExistingTableName(),
-                        previewContext.getParsedCsv(),
-                        dbColumns,
-                        importRequest.getMappings()
-                );
-            }
+            result = executeConfiguredFlow(importRequest, previewContext);
         } else {
-            result = importService.importCsv(importRequest, previewContext.getParsedCsv());
+            result = executeConfiguredFlow(importRequest, previewContext);
         }
         model.addAttribute("result", result);
         sessionStatus.setComplete();
         return "result";
+    }
+
+    private ImportResult executeConfiguredFlow(ImportRequest importRequest, PreviewContext previewContext) {
+        return flowExecutionService.execute(flowConfigurationFactory.fromImportContext(importRequest, previewContext));
     }
 
     private List<ColumnProposal> copyColumns(List<ColumnProposal> source) {
