@@ -55,6 +55,10 @@ explicit key mappings and are covered by H2 integration tests.
 Import profiles are now available through `/api/profiles` as validated JSON
 files, including list, load, save and delete operations.
 
+Asynchronous imports are now available through `/api/jobs/import`, with queued,
+running, succeeded, failed and cancelled states plus status listing, polling
+and cancellation endpoints. The browser progress-bar can build on this API.
+
 ## Product Direction
 
 `zeus-easy-upload` is no longer just a CSV-to-DB prototype. The current application already supports:
