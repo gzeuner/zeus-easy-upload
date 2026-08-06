@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    driver-class-name: ${IT_DB_DRIVER:com.ibm.as400.access.AS400JDBCDriver}
+    url: ${IT_DB_URL:jdbc:as400://localhost/default}
+    username: ${IT_DB_USERNAME:}
+    password: ${IT_DB_PASSWORD:}
+  sql:
+    init:
+      mode: never
+
