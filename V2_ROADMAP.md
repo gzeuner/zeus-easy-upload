@@ -61,7 +61,8 @@ and cancellation endpoints. The browser progress-bar can build on this API.
 
 The connector foundation now also includes a configurable UTF-8 CSV target
 that preserves record field order, quotes values safely and creates parent
-directories as needed.
+directories as needed. It can stream records when a header order is supplied,
+avoiding full result materialization for large exports.
 
 The database source connector is now available as a neutral-record source,
 enabling DB-to-CSV and DB-to-DB flows through the existing `DataFlow` seam. Its
