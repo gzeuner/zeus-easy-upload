@@ -13,6 +13,7 @@ public class DbTableTargetConfiguration implements TargetConfiguration {
     private final String tableName;
     private final DbTableWriteMode writeMode;
     private final boolean dropAndRecreate;
+    private final boolean dryRun;
     private final List<ColumnProposal> columns;
     private final List<ColumnMapping> mappings;
     private final List<String> keyColumns;
@@ -28,10 +29,25 @@ public class DbTableTargetConfiguration implements TargetConfiguration {
             List<String> keyColumns,
             List<DbColumnMeta> dbColumns
     ) {
+        this(library, tableName, writeMode, dropAndRecreate, false, columns, mappings, keyColumns, dbColumns);
+    }
+
+    public DbTableTargetConfiguration(
+            String library,
+            String tableName,
+            DbTableWriteMode writeMode,
+            boolean dropAndRecreate,
+            boolean dryRun,
+            List<ColumnProposal> columns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            List<DbColumnMeta> dbColumns
+    ) {
         this.library = Objects.requireNonNull(library, "library must not be null");
         this.tableName = Objects.requireNonNull(tableName, "tableName must not be null");
         this.writeMode = Objects.requireNonNull(writeMode, "writeMode must not be null");
         this.dropAndRecreate = dropAndRecreate;
+        this.dryRun = dryRun;
         this.columns = columns == null ? List.of() : List.copyOf(new ArrayList<>(columns));
         this.mappings = mappings == null ? List.of() : List.copyOf(new ArrayList<>(mappings));
         this.keyColumns = keyColumns == null ? List.of() : List.copyOf(new ArrayList<>(keyColumns));
@@ -52,6 +68,10 @@ public class DbTableTargetConfiguration implements TargetConfiguration {
 
     public boolean isDropAndRecreate() {
         return dropAndRecreate;
+    }
+
+    public boolean isDryRun() {
+        return dryRun;
     }
 
     public List<ColumnProposal> getColumns() {

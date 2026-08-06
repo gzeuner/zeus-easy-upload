@@ -62,6 +62,10 @@ public class ImportService {
     }
 
     public ImportResult importCsv(ImportRequest request, ParsedCsv parsedCsv) {
+        return importCsv(request, parsedCsv, request.isDryRun());
+    }
+
+    private ImportResult importCsv(ImportRequest request, ParsedCsv parsedCsv, boolean dryRun) {
         List<ParseError> errors = new ArrayList<>();
         String createSql = ddlService.createTableSql(request.getLibrary(), request.getTableName(), request.getColumns());
         String insertSql = ddlService.insertSql(request.getLibrary(), request.getTableName(), request.getColumns());
@@ -88,6 +92,10 @@ public class ImportService {
                 throw new ImportException("Import aborted due to conversion errors", errors);
             }
 
+            if (dryRun) {
+                connection.rollback();
+                return ImportResult.success("Dry run successful; transaction rolled back", createSql, insertedRows);
+            }
             connection.commit();
             return ImportResult.success("Import successful", createSql, insertedRows);
         } catch (ImportException ex) {
@@ -104,6 +112,17 @@ public class ImportService {
             ParsedCsv csv,
             List<DbColumnMeta> dbColumns,
             List<ColumnMapping> mappings
+    ) {
+        return importIntoExistingTable(library, tableName, csv, dbColumns, mappings, false);
+    }
+
+    public ImportResult importIntoExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            boolean dryRun
     ) {
         List<ParseError> errors = new ArrayList<>();
         List<ColumnMapping> effectiveMappings = determineEffectiveMappings(mappings);
@@ -139,6 +158,10 @@ public class ImportService {
                 connection.rollback();
                 throw new ImportException("Import aborted due to insert errors", errors);
             }
+            if (dryRun) {
+                connection.rollback();
+                return ImportResult.success("Dry run successful; transaction rolled back", insertSql, insertedRows);
+            }
             connection.commit();
             return ImportResult.success("Import successful", insertSql, insertedRows);
         } catch (ImportException ex) {
@@ -156,6 +179,18 @@ public class ImportService {
             List<DbColumnMeta> dbColumns,
             List<ColumnMapping> mappings,
             List<String> keyColumns
+    ) {
+        return upsertIntoExistingTable(library, tableName, csv, dbColumns, mappings, keyColumns, false);
+    }
+
+    public ImportResult upsertIntoExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
     ) {
         List<ParseError> errors = new ArrayList<>();
         List<ColumnMapping> effectiveMappings = determineEffectiveMappings(mappings);
@@ -231,6 +266,10 @@ public class ImportService {
             if (!errors.isEmpty()) {
                 connection.rollback();
                 throw new ImportException("Import aborted due to upsert errors", errors);
+            }
+            if (dryRun) {
+                connection.rollback();
+                return ImportResult.success("Dry run successful; transaction rolled back", mergeSql, processedRows);
             }
             connection.commit();
             return ImportResult.success("Upsert successful", mergeSql, processedRows);

@@ -16,6 +16,10 @@ public class ImportRequest {
     private boolean dropAndRecreate;
     private boolean useExistingTable;
     private boolean upsertEnabled;
+    private boolean dryRun;
+    private String csvDelimiter;
+    private String csvEncoding;
+    private String csvQuote;
     private String existingTableName;
     private List<String> keyColumns = new ArrayList<>();
 
@@ -69,6 +73,38 @@ public class ImportRequest {
 
     public void setUpsertEnabled(boolean upsertEnabled) {
         this.upsertEnabled = upsertEnabled;
+    }
+
+    public boolean isDryRun() {
+        return dryRun;
+    }
+
+    public void setDryRun(boolean dryRun) {
+        this.dryRun = dryRun;
+    }
+
+    public String getCsvDelimiter() {
+        return csvDelimiter;
+    }
+
+    public void setCsvDelimiter(String csvDelimiter) {
+        this.csvDelimiter = csvDelimiter;
+    }
+
+    public String getCsvEncoding() {
+        return csvEncoding;
+    }
+
+    public void setCsvEncoding(String csvEncoding) {
+        this.csvEncoding = csvEncoding;
+    }
+
+    public String getCsvQuote() {
+        return csvQuote;
+    }
+
+    public void setCsvQuote(String csvQuote) {
+        this.csvQuote = csvQuote;
     }
 
     public List<String> getKeyColumns() {

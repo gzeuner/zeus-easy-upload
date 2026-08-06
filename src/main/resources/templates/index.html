@@ -21,6 +21,35 @@
                             <label for="file" class="form-label">CSV File</label>
                             <input class="form-control" id="file" name="file" type="file" accept=".csv,text/csv" required>
                         </div>
+                        <div class="card border-0 bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="mb-3">CSV Settings</h6>
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <label for="csvDelimiter" class="form-label">Delimiter</label>
+                                        <select class="form-select" id="csvDelimiter" name="csvDelimiter">
+                                            <option value="">Auto-detect</option>
+                                            <option value=",">Comma (,)</option>
+                                            <option value=";">Semicolon (;)</option>
+                                            <option value="|">Pipe (|)</option>
+                                            <option value="&#9;">Tab</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label for="csvEncoding" class="form-label">Encoding</label>
+                                        <select class="form-select" id="csvEncoding" name="csvEncoding">
+                                            <option value="UTF-8" selected>UTF-8</option>
+                                            <option value="windows-1252">Windows-1252</option>
+                                            <option value="ISO-8859-1">ISO-8859-1</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label for="csvQuote" class="form-label">Quote</label>
+                                        <input class="form-control" id="csvQuote" name="csvQuote" value="&quot;" maxlength="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="library" class="form-label">Library (Schema)</label>

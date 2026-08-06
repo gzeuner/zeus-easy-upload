@@ -3,6 +3,7 @@ package com.zeus.upload.controller;
 import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.config.AppProperties;
 import com.zeus.upload.domain.ColumnProposal;
+import com.zeus.upload.domain.CsvImportOptions;
 import com.zeus.upload.domain.DbColumnMeta;
 import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
@@ -86,6 +87,9 @@ public class UploadController {
             @RequestParam(value = "dropAndRecreate", defaultValue = "false") boolean dropAndRecreate,
             @RequestParam(value = "useExistingTable", defaultValue = "false") boolean useExistingTable,
             @RequestParam(value = "existingTableName", required = false) String existingTableName,
+            @RequestParam(value = "csvDelimiter", required = false) String csvDelimiter,
+            @RequestParam(value = "csvEncoding", required = false) String csvEncoding,
+            @RequestParam(value = "csvQuote", required = false) String csvQuote,
             @ModelAttribute("previewContext") PreviewContext previewContext,
             Model model,
             RedirectAttributes redirectAttributes
@@ -96,7 +100,13 @@ public class UploadController {
         }
 
         try {
-            var parsed = csvParsingService.parse(file);
+            CsvImportOptions csvOptions = new CsvImportOptions();
+            csvOptions.setDelimiter(csvDelimiter);
+            csvOptions.setEncoding(csvEncoding);
+            csvOptions.setQuote(csvQuote);
+            var parsed = isDefaultCsvOptions(csvOptions)
+                    ? csvParsingService.parse(file)
+                    : csvParsingService.parse(file, csvOptions);
             ImportRequest request = new ImportRequest();
             request.setLibrary(library);
             request.setTableName(tableName);
@@ -111,6 +121,9 @@ public class UploadController {
             request.setColumns(copyColumns(parsed.getProposals()));
             request.setUpsertEnabled(false);
             request.setKeyColumns(List.of());
+            request.setCsvDelimiter(csvDelimiter);
+            request.setCsvEncoding(csvEncoding);
+            request.setCsvQuote(csvQuote);
 
             if (useExistingTable && StringUtils.hasText(existingTableName)) {
                 List<DbColumnMeta> dbColumns = metadataService.listColumns(library, existingTableName);
@@ -221,6 +234,12 @@ public class UploadController {
             copy.add(c);
         }
         return copy;
+    }
+
+    private boolean isDefaultCsvOptions(CsvImportOptions options) {
+        return !StringUtils.hasText(options.getDelimiter())
+                && (!StringUtils.hasText(options.getEncoding()) || "UTF-8".equalsIgnoreCase(options.getEncoding()))
+                && (!StringUtils.hasText(options.getQuote()) || "\"".equals(options.getQuote()));
     }
 
     private List<ColumnMapping> copyMappings(List<ColumnMapping> source) {

@@ -2,6 +2,7 @@ package com.zeus.upload.service;
 
 import com.zeus.upload.config.AppProperties;
 import com.zeus.upload.domain.ColumnProposal;
+import com.zeus.upload.domain.CsvImportOptions;
 import com.zeus.upload.domain.ParseError;
 import com.zeus.upload.domain.ParsedCsv;
 import com.zeus.upload.util.ColumnNameSanitizer;
@@ -40,10 +41,16 @@ public class CsvParsingService {
     }
 
     public ParsedCsv parse(MultipartFile file) throws IOException {
-        String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-        char delimiter = detectDelimiter(content);
+        return parse(file, CsvImportOptions.defaults());
+    }
+
+    public ParsedCsv parse(MultipartFile file, CsvImportOptions options) throws IOException {
+        CsvImportOptions effectiveOptions = options == null ? CsvImportOptions.defaults() : options;
+        String content = new String(file.getBytes(), effectiveOptions.charset());
+        char delimiter = effectiveOptions.delimiterOr(detectDelimiter(content));
         CSVFormat format = CSVFormat.DEFAULT.builder()
                 .setDelimiter(delimiter)
+                .setQuote(effectiveOptions.quoteOr('"'))
                 .setHeader()
                 .setSkipHeaderRecord(true)
                 .setIgnoreEmptyLines(true)

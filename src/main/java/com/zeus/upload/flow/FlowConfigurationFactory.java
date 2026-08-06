@@ -14,6 +14,7 @@ public class FlowConfigurationFactory {
                 resolveTargetTable(importRequest),
                 resolveWriteMode(importRequest),
                 importRequest.isDropAndRecreate(),
+                importRequest.isDryRun(),
                 importRequest.getColumns(),
                 importRequest.getMappings(),
                 importRequest.getKeyColumns(),

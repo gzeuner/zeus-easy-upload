@@ -1,5 +1,52 @@
 # V2 Roadmap
 
+## tiny-tool.de Product Roadmap (2026-08-04)
+
+Product goal: turn the current CSV-to-DB flow into a safe, comfortable mass-data
+processing workspace with automatic mapping and precise manual control.
+
+### Phase 0 — Safe foundation (current)
+
+- Preserve the existing CSV -> DB2/400 workflow.
+- Make every write operation previewable via a transaction-backed dry run.
+- Expose a neutral operation model in the flow configuration.
+- Keep validation, mapping and execution results explicit and testable.
+
+### Phase 1 — Mass-data MVP
+
+- CSV and Excel upload with encoding, delimiter and quote options.
+- Insert, update, upsert/merge and delete operations.
+- Automatic mapping with confidence indicators and manual overrides.
+- Key-column selection, transformations and null/empty-value policies.
+- Preview of affected rows, validation errors and conflict handling.
+
+### Phase 2 — Repeatable workflows
+
+- Save and load import profiles.
+- Background jobs with progress, cancellation and retry.
+- Job history, downloadable error reports and audit trail.
+- API endpoints for starting and inspecting jobs.
+
+### Phase 3 — Connectors and automation
+
+- Database sources and targets beyond the initial DB2/400 connector.
+- REST, filesystem, FTP/SFTP and object-storage connectors.
+- Scheduled synchronizations and reusable multi-step flows.
+- Tenant isolation, roles, secrets management and usage limits for tiny-tool.de.
+
+### Product guardrails
+
+- Destructive operations require an explicit preview and confirmation.
+- Dry runs must use the same validation and SQL path as real executions.
+- Existing successful CSV -> DB behavior remains backwards compatible.
+- Large imports run in batches and never require loading the complete file into the UI.
+
+### Current implementation slice
+
+`Dry Run` is the first Phase 0 feature. It is available for create-table,
+insert-existing and upsert-existing flows and rolls back the transaction while
+returning the same affected-row count and generated SQL for review.
+
 ## Product Direction
 
 `zeus-easy-upload` is no longer just a CSV-to-DB prototype. The current application already supports:
