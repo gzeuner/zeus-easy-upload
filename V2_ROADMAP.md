@@ -135,6 +135,10 @@ After the minimal connector seam is in place, planned expansion areas are:
 - REST connector foundation
 - cloud/object storage connector foundation
 
+Issue #47 is now covered by the protocol connector foundation document. The
+concrete adapters remain sequenced follow-up work with explicit security and
+deployment prerequisites.
+
 ## Track A: Connector Architecture
 
 This track is intentionally ahead of broader platform features because it creates the seam needed for future source/target combinations.
