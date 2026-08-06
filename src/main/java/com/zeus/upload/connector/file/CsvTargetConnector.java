@@ -56,6 +56,6 @@ public class CsvTargetConnector implements TargetConnector {
                     String.valueOf(configuration.getQuote()) + configuration.getQuote()));
             writer.write(configuration.getQuote());
         }
-        writer.newLine();
+        writer.write("\r\n");
     }
 }
