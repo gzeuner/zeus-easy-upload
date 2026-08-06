@@ -17,6 +17,7 @@ public class ImportRequest {
     private boolean useExistingTable;
     private boolean upsertEnabled;
     private boolean dryRun;
+    private String operation = "INSERT";
     private String csvDelimiter;
     private String csvEncoding;
     private String csvQuote;
@@ -81,6 +82,14 @@ public class ImportRequest {
 
     public void setDryRun(boolean dryRun) {
         this.dryRun = dryRun;
+    }
+
+    public String getOperation() {
+        return operation;
+    }
+
+    public void setOperation(String operation) {
+        this.operation = operation;
     }
 
     public String getCsvDelimiter() {

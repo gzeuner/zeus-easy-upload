@@ -41,6 +41,7 @@
         <input type="hidden" th:field="*{csvDelimiter}">
         <input type="hidden" th:field="*{csvEncoding}">
         <input type="hidden" th:field="*{csvQuote}">
+        <input type="hidden" th:field="*{operation}" id="operationValue">
 
         <div class="card shadow-sm mb-3">
             <div class="card-body">
@@ -69,8 +70,14 @@
                 <div class="row" th:if="${importRequest.useExistingTable}">
                     <div class="col-md-4 mb-3">
                         <div class="form-check mt-1">
-                            <input class="form-check-input" type="checkbox" th:field="*{upsertEnabled}">
-                            <label class="form-check-label">Upsert (MERGE) instead of INSERT</label>
+                            <label class="form-label" for="operationSelect">Operation</label>
+                            <select class="form-select" id="operationSelect">
+                                <option value="INSERT">Insert new rows</option>
+                                <option value="UPDATE">Update existing rows</option>
+                                <option value="UPSERT">Upsert / Merge</option>
+                                <option value="DELETE">Delete matching rows</option>
+                            </select>
+                            <div class="form-text">Update und Delete benötigen Schlüsselspalten.</div>
                         </div>
                     </div>
                     <div class="col-md-8 mb-3">
@@ -241,9 +248,20 @@
         </div>
 
         <button th:if="${!importRequest.useExistingTable}" type="submit" class="btn btn-success">Create Table and Import</button>
-        <button th:if="${importRequest.useExistingTable}" type="submit" class="btn btn-success"
-                th:text="${importRequest.upsertEnabled} ? 'Upsert Into Existing Table' : 'Import Into Existing Table'">Import Into Existing Table</button>
+        <button th:if="${importRequest.useExistingTable}" type="submit" class="btn btn-success">Execute Operation</button>
     </form>
 </div>
+<script th:if="${importRequest.useExistingTable}">
+    (() => {
+        const select = document.getElementById('operationSelect');
+        const hidden = document.getElementById('operationValue');
+        if (!select || !hidden) return;
+        select.value = hidden.value || 'INSERT';
+        select.addEventListener('change', () => {
+            hidden.value = select.value;
+        });
+        hidden.value = select.value;
+    })();
+</script>
 </body>
 </html>

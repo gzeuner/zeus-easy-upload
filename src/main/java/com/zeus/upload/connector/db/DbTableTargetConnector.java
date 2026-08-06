@@ -47,6 +47,22 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
             return;
         }
 
+        if (configuration.getWriteMode() == DbTableWriteMode.UPDATE_EXISTING) {
+            result = importService.updateIntoExistingTable(
+                    configuration.getLibrary(), configuration.getTableName(), parsedCsv,
+                    configuration.getDbColumns(), configuration.getMappings(),
+                    configuration.getKeyColumns(), configuration.isDryRun());
+            return;
+        }
+
+        if (configuration.getWriteMode() == DbTableWriteMode.DELETE_EXISTING) {
+            result = importService.deleteFromExistingTable(
+                    configuration.getLibrary(), configuration.getTableName(), parsedCsv,
+                    configuration.getDbColumns(), configuration.getMappings(),
+                    configuration.getKeyColumns(), configuration.isDryRun());
+            return;
+        }
+
         result = importService.importIntoExistingTable(
                 configuration.getLibrary(),
                 configuration.getTableName(),

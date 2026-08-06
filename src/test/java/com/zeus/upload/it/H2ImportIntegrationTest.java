@@ -136,6 +136,41 @@ class H2ImportIntegrationTest {
     }
 
     @Test
+    void shouldUpdateAndDeleteExistingRowsBySelectedKeys() {
+        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"TESTLIB\"");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS \"TESTLIB\".\"H2_UPDATE_DELETE_IT\"");
+        jdbcTemplate.execute("CREATE TABLE \"TESTLIB\".\"H2_UPDATE_DELETE_IT\" (\"ID\" INTEGER PRIMARY KEY, \"NAME\" VARCHAR(128) NOT NULL)");
+        jdbcTemplate.update("INSERT INTO \"TESTLIB\".\"H2_UPDATE_DELETE_IT\" VALUES (?, ?)", 1, "Old Alice");
+        jdbcTemplate.update("INSERT INTO \"TESTLIB\".\"H2_UPDATE_DELETE_IT\" VALUES (?, ?)", 2, "Bob");
+
+        ParsedCsv updateCsv = rowsCsv(List.of("id", "name"), List.of(List.of("1", "New Alice")));
+        List<DbColumnMeta> dbColumns = List.of(
+                new DbColumnMeta("ID", "INTEGER", java.sql.Types.INTEGER, 10, 10, 0, false, null, 1),
+                new DbColumnMeta("NAME", "VARCHAR", java.sql.Types.VARCHAR, 128, 128, 0, false, null, 2)
+        );
+        List<ColumnMapping> updateMappings = List.of(
+                mapping(0, "id", "ID", false),
+                mapping(1, "name", "NAME", false)
+        );
+
+        assertThat(mappingService.validate(updateCsv, dbColumns, updateMappings, "UPDATE", List.of("ID")).isValid())
+                .isTrue();
+        ImportResult updateResult = importService.updateIntoExistingTable(
+                LIBRARY, "H2_UPDATE_DELETE_IT", updateCsv, dbColumns, updateMappings, List.of("ID"), false);
+        assertThat(updateResult.isSuccess()).isTrue();
+        assertThat(jdbcTemplate.queryForObject("SELECT \"NAME\" FROM \"TESTLIB\".\"H2_UPDATE_DELETE_IT\" WHERE \"ID\" = 1", String.class))
+                .isEqualTo("New Alice");
+
+        ParsedCsv deleteCsv = rowsCsv(List.of("id"), List.of(List.of("2")));
+        List<ColumnMapping> deleteMappings = List.of(mapping(0, "id", "ID", false));
+        ImportResult deleteResult = importService.deleteFromExistingTable(
+                LIBRARY, "H2_UPDATE_DELETE_IT", deleteCsv, dbColumns, deleteMappings, List.of("ID"), false);
+        assertThat(deleteResult.isSuccess()).isTrue();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM \"TESTLIB\".\"H2_UPDATE_DELETE_IT\"", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
     @Disabled("H2 MODE=DB2 does not reliably support DB2 for i MERGE ... USING (VALUES ...) syntax.")
     void shouldExecuteDb2StyleMergeSqlAgainstH2() {
         jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"TESTLIB\"");
@@ -200,6 +235,13 @@ class H2ImportIntegrationTest {
             mappings.add(mapping(i, header, target, false));
         }
         return mappings;
+    }
+
+    private ParsedCsv rowsCsv(List<String> headers, List<List<String>> rows) {
+        ParsedCsv csv = new ParsedCsv();
+        csv.getOriginalHeaders().addAll(headers);
+        csv.getRows().addAll(rows);
+        return csv;
     }
 
     private ColumnMapping mapping(int csvIndex, String csvColumn, String targetColumn, boolean ignored) {

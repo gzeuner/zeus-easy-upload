@@ -183,6 +183,187 @@ public class ImportService {
         return upsertIntoExistingTable(library, tableName, csv, dbColumns, mappings, keyColumns, false);
     }
 
+    public ImportResult updateIntoExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        List<ColumnMapping> effectiveMappings = determineEffectiveMappings(mappings);
+        List<String> keys = normalizeSelectedKeys(keyColumns);
+        String sql = "";
+        List<ParseError> errors = validateKeyedOperation(effectiveMappings, dbColumns, keys, "update");
+        if (!errors.isEmpty()) {
+            return ImportResult.failure("Update aborted due to invalid mapping.", sql, errors);
+        }
+
+        List<ColumnMapping> keyMappings = mappingsForKeys(effectiveMappings, keys);
+        List<ColumnMapping> updateMappings = effectiveMappings.stream()
+                .filter(mapping -> !containsNormalized(keys, mapping.getTargetColumn()))
+                .toList();
+        if (updateMappings.isEmpty()) {
+            return ImportResult.failure("Update requires at least one non-key mapped column.", sql,
+                    List.of(new ParseError(0, "", "", "Map at least one non-key column for updates.")));
+        }
+
+        sql = buildUpdateSql(library, tableName, updateMappings, keyMappings);
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            int affectedRows = executeKeyedRows(connection, sql, updateMappings, keyMappings, csv.getRows(), errors);
+            if (!errors.isEmpty()) {
+                connection.rollback();
+                throw new ImportException("Import aborted due to update errors", errors);
+            }
+            if (dryRun) {
+                connection.rollback();
+                return ImportResult.success("Dry run successful; transaction rolled back", sql, affectedRows);
+            }
+            connection.commit();
+            return ImportResult.success("Update successful", sql, affectedRows);
+        } catch (ImportException ex) {
+            return ImportResult.failure(ex.getMessage(), sql, ex.getErrors());
+        } catch (Exception ex) {
+            errors.add(new ParseError(0, "", "", ex.getMessage()));
+            return ImportResult.failure("Update failed: " + ex.getMessage(), sql, errors);
+        }
+    }
+
+    public ImportResult deleteFromExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        List<ColumnMapping> effectiveMappings = determineEffectiveMappings(mappings);
+        List<String> keys = normalizeSelectedKeys(keyColumns);
+        String sql = "";
+        List<ParseError> errors = validateKeyedOperation(effectiveMappings, dbColumns, keys, "delete");
+        if (!errors.isEmpty()) {
+            return ImportResult.failure("Delete aborted due to invalid mapping.", sql, errors);
+        }
+
+        List<ColumnMapping> keyMappings = mappingsForKeys(effectiveMappings, keys);
+        sql = buildDeleteSql(library, tableName, keyMappings);
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            int affectedRows = executeKeyedRows(connection, sql, keyMappings, List.of(), csv.getRows(), errors);
+            if (!errors.isEmpty()) {
+                connection.rollback();
+                throw new ImportException("Import aborted due to delete errors", errors);
+            }
+            if (dryRun) {
+                connection.rollback();
+                return ImportResult.success("Dry run successful; transaction rolled back", sql, affectedRows);
+            }
+            connection.commit();
+            return ImportResult.success("Delete successful", sql, affectedRows);
+        } catch (ImportException ex) {
+            return ImportResult.failure(ex.getMessage(), sql, ex.getErrors());
+        } catch (Exception ex) {
+            errors.add(new ParseError(0, "", "", ex.getMessage()));
+            return ImportResult.failure("Delete failed: " + ex.getMessage(), sql, errors);
+        }
+    }
+
+    private List<ParseError> validateKeyedOperation(
+            List<ColumnMapping> mappings,
+            List<DbColumnMeta> dbColumns,
+            List<String> keys,
+            String operation
+    ) {
+        List<ParseError> errors = new ArrayList<>();
+        Set<String> knownColumns = toNormalizedColumnSet(dbColumns);
+        Set<String> mappedColumns = mappings.stream()
+                .map(ColumnMapping::getTargetColumn)
+                .map(this::normalizeColumnName)
+                .collect(java.util.stream.Collectors.toSet());
+        for (ColumnMapping mapping : mappings) {
+            if (!knownColumns.isEmpty() && !knownColumns.contains(normalizeColumnName(mapping.getTargetColumn()))) {
+                errors.add(new ParseError(0, mapping.getTargetColumn(), "", "Mapped target column does not exist in table metadata."));
+            }
+        }
+        if (mappings.isEmpty()) {
+            errors.add(new ParseError(0, "", "", "Map at least one CSV column to a target column."));
+        }
+        if (keys.isEmpty()) {
+            errors.add(new ParseError(0, "", "", "Select at least one key column for " + operation + "."));
+        }
+        for (String key : keys) {
+            if (!knownColumns.isEmpty() && !knownColumns.contains(normalizeColumnName(key))) {
+                errors.add(new ParseError(0, key, "", "Key column does not exist in table metadata."));
+            }
+            if (!mappedColumns.contains(normalizeColumnName(key))) {
+                errors.add(new ParseError(0, key, "", "Key column must be mapped and not ignored."));
+            }
+        }
+        return errors;
+    }
+
+    private List<ColumnMapping> mappingsForKeys(List<ColumnMapping> mappings, List<String> keys) {
+        return mappings.stream().filter(mapping -> containsNormalized(keys, mapping.getTargetColumn())).toList();
+    }
+
+    private String buildUpdateSql(String library, String tableName, List<ColumnMapping> updates, List<ColumnMapping> keys) {
+        String assignments = updates.stream()
+                .map(mapping -> sqlDialect.quoteIdentifier(mapping.getTargetColumn()) + " = ?")
+                .collect(java.util.stream.Collectors.joining(", "));
+        return "UPDATE " + sqlDialect.qualifyTable(library, tableName) + " SET " + assignments
+                + " WHERE " + whereClause(keys);
+    }
+
+    private String buildDeleteSql(String library, String tableName, List<ColumnMapping> keys) {
+        return "DELETE FROM " + sqlDialect.qualifyTable(library, tableName) + " WHERE " + whereClause(keys);
+    }
+
+    private String whereClause(List<ColumnMapping> keys) {
+        return keys.stream()
+                .map(mapping -> sqlDialect.quoteIdentifier(mapping.getTargetColumn()) + " = ?")
+                .collect(java.util.stream.Collectors.joining(" AND "));
+    }
+
+    private int executeKeyedRows(
+            Connection connection,
+            String sql,
+            List<ColumnMapping> valueMappings,
+            List<ColumnMapping> keyMappings,
+            List<List<String>> rows,
+            List<ParseError> errors
+    ) throws SQLException {
+        int affectedRows = 0;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+                try {
+                    statement.clearParameters();
+                    bindMappings(statement, valueMappings, rows.get(rowIndex), 1);
+                    bindMappings(statement, keyMappings, rows.get(rowIndex), valueMappings.size() + 1);
+                    affectedRows += statement.executeUpdate();
+                } catch (Exception ex) {
+                    errors.add(new ParseError(rowIndex + 2L, "", "", ex.getMessage()));
+                }
+            }
+        }
+        return affectedRows;
+    }
+
+    private void bindMappings(PreparedStatement statement, List<ColumnMapping> mappings, List<String> row, int startIndex)
+            throws SQLException {
+        for (int index = 0; index < mappings.size(); index++) {
+            int csvIndex = mappings.get(index).getCsvIndex();
+            String value = csvIndex < row.size() ? row.get(csvIndex) : null;
+            if (!StringUtils.hasText(value)) {
+                statement.setNull(startIndex + index, Types.VARCHAR);
+            } else {
+                statement.setString(startIndex + index, value.trim());
+            }
+        }
+    }
+
     public ImportResult upsertIntoExistingTable(
             String library,
             String tableName,
