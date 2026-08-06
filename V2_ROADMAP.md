@@ -76,6 +76,15 @@ Target architecture:
 
 ## Status Overview
 
+### GitHub issue alignment (checked 2026-08-06)
+
+The closed issues confirm the completed foundation: #3, #4, #8, #38 and
+#42-#44 are reflected in the current connector, metadata, mapping and test
+architecture. Issue #12 (CSV encoding/delimiter/quote settings) was completed
+by PR #49 and is ready to be closed. Issue #10 (CSV/JSON error reports) is the
+current implementation slice. The remaining open issues are tracked below by
+their product package rather than treated as separate rewrites.
+
 ### Done: CSV-to-DB foundation
 
 - `#3` Auto-Mapping auf bestehende Tabellen
