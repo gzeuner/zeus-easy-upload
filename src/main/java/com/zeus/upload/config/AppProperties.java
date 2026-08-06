@@ -21,6 +21,8 @@ public class AppProperties {
     @Max(10_000)
     private int batchSize = 500;
 
+    private String profileDirectory = "profiles";
+
     public String getDefaultLibrary() {
         return defaultLibrary;
     }
@@ -43,5 +45,13 @@ public class AppProperties {
 
     public void setBatchSize(int batchSize) {
         this.batchSize = batchSize;
+    }
+
+    public String getProfileDirectory() {
+        return profileDirectory;
+    }
+
+    public void setProfileDirectory(String profileDirectory) {
+        this.profileDirectory = profileDirectory;
     }
 }
