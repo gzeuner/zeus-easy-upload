@@ -69,12 +69,23 @@ public class MappingService {
             boolean upsertEnabled,
             List<String> keyColumns
     ) {
+        return validate(csv, dbColumns, mappings, upsertEnabled ? "UPSERT" : "INSERT", keyColumns);
+    }
+
+    public MappingValidationResult validate(
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            String operation,
+            List<String> keyColumns
+    ) {
         MappingValidationResult result = new MappingValidationResult();
         List<ColumnMapping> safeMappings = mappings == null ? List.of() : mappings;
         List<DbColumnMeta> safeDbColumns = dbColumns == null ? List.of() : dbColumns;
 
         Set<String> existingColumns = new HashSet<>();
         Map<String, DbColumnMeta> byNormalizedName = new HashMap<>();
+        boolean keyOnlyOperation = "UPDATE".equalsIgnoreCase(operation) || "DELETE".equalsIgnoreCase(operation);
         for (DbColumnMeta dbColumn : safeDbColumns) {
             if (!StringUtils.hasText(dbColumn.getColumnName())) {
                 continue;
@@ -108,7 +119,7 @@ public class MappingService {
                 continue;
             }
             String dbColumnKey = normalizeDbKey(dbColumn.getColumnName());
-            if (!dbColumn.isNullable() && !mappedDbColumns.contains(dbColumnKey) && !hasDefault(dbColumn.getDefaultValue())) {
+            if (!keyOnlyOperation && !dbColumn.isNullable() && !mappedDbColumns.contains(dbColumnKey) && !hasDefault(dbColumn.getDefaultValue())) {
                 result.getErrors().add("Required target column '" + dbColumn.getColumnName()
                         + "' is not mapped and has no default value.");
             }
@@ -143,7 +154,8 @@ public class MappingService {
             }
         }
 
-        if (upsertEnabled) {
+        if ("UPDATE".equalsIgnoreCase(operation) || "DELETE".equalsIgnoreCase(operation)
+                || "UPSERT".equalsIgnoreCase(operation)) {
             Set<String> normalizedKeys = new LinkedHashSet<>();
             List<String> safeKeyColumns = keyColumns == null ? List.of() : keyColumns;
             for (String keyColumn : safeKeyColumns) {
@@ -153,7 +165,7 @@ public class MappingService {
                 normalizedKeys.add(normalizeDbKey(keyColumn));
             }
             if (normalizedKeys.isEmpty()) {
-                result.getErrors().add("At least one key column is required for upsert mode.");
+                result.getErrors().add("At least one key column is required for " + operation.toLowerCase() + " mode.");
             } else {
                 for (String normalizedKey : normalizedKeys) {
                     if (!existingColumns.contains(normalizedKey)) {

@@ -44,8 +44,13 @@ processing workspace with automatic mapping and precise manual control.
 ### Current implementation slice
 
 `Dry Run` is the first Phase 0 feature. It is available for create-table,
-insert-existing and upsert-existing flows and rolls back the transaction while
-returning the same affected-row count and generated SQL for review.
+insert-existing, update-existing, delete-existing and upsert-existing flows
+and rolls back the transaction while returning the affected-row count and
+generated SQL for review.
+
+The first Phase 1 operation slice is also implemented: existing-table flows
+now expose Insert, Update, Upsert/Merge and Delete. Update and Delete require
+explicit key mappings and are covered by H2 integration tests.
 
 ## Product Direction
 

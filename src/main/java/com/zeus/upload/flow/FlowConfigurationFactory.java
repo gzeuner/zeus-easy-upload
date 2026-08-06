@@ -27,6 +27,21 @@ public class FlowConfigurationFactory {
         if (!importRequest.isUseExistingTable()) {
             return DbTableWriteMode.CREATE_TABLE;
         }
+        if (importRequest.getOperation() != null) {
+            try {
+                return switch (importRequest.getOperation().trim().toUpperCase()) {
+                    case "UPDATE" -> DbTableWriteMode.UPDATE_EXISTING;
+                    case "DELETE" -> DbTableWriteMode.DELETE_EXISTING;
+                    case "UPSERT" -> DbTableWriteMode.UPSERT_EXISTING;
+                    case "INSERT" -> importRequest.isUpsertEnabled()
+                            ? DbTableWriteMode.UPSERT_EXISTING
+                            : DbTableWriteMode.INSERT_EXISTING;
+                    default -> DbTableWriteMode.INSERT_EXISTING;
+                };
+            } catch (IllegalArgumentException ignored) {
+                // Fall through to the legacy upsert flag.
+            }
+        }
         if (importRequest.isUpsertEnabled()) {
             return DbTableWriteMode.UPSERT_EXISTING;
         }

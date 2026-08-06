@@ -120,6 +120,7 @@ public class UploadController {
             }
             request.setColumns(copyColumns(parsed.getProposals()));
             request.setUpsertEnabled(false);
+            request.setOperation(useExistingTable ? "INSERT" : "CREATE");
             request.setKeyColumns(List.of());
             request.setCsvDelimiter(csvDelimiter);
             request.setCsvEncoding(csvEncoding);
@@ -190,7 +191,7 @@ public class UploadController {
                     previewContext.getParsedCsv(),
                     dbColumns,
                     importRequest.getMappings(),
-                    importRequest.isUpsertEnabled(),
+                    importRequest.getOperation(),
                     importRequest.getKeyColumns()
             );
             if (!validationResult.isValid()) {
