@@ -59,6 +59,10 @@ Asynchronous imports are now available through `/api/jobs/import`, with queued,
 running, succeeded, failed and cancelled states plus status listing, polling
 and cancellation endpoints. The browser progress-bar can build on this API.
 
+The connector foundation now also includes a configurable UTF-8 CSV target
+that preserves record field order, quotes values safely and creates parent
+directories as needed.
+
 ## Product Direction
 
 `zeus-easy-upload` is no longer just a CSV-to-DB prototype. The current application already supports:
