@@ -26,6 +26,10 @@
 
                     <div th:if="${result.errors != null and !result.errors.isEmpty()}">
                         <h5>Errors</h5>
+                        <div class="mb-2">
+                            <a class="btn btn-sm btn-outline-secondary" th:href="@{/result/errors.csv}">Download CSV</a>
+                            <a class="btn btn-sm btn-outline-secondary" th:href="@{/result/errors.json}">Download JSON</a>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-sm table-striped">
                                 <thead>

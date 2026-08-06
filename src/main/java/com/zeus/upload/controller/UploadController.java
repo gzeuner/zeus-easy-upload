@@ -28,13 +28,12 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.SessionAttributes;
-import org.springframework.web.bind.support.SessionStatus;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.util.StringUtils;
 
 @Controller
-@SessionAttributes("previewContext")
+@SessionAttributes({"previewContext", "lastImportResult"})
 public class UploadController {
 
     private static final Logger log = LoggerFactory.getLogger(UploadController.class);
@@ -167,8 +166,7 @@ public class UploadController {
             @Valid @ModelAttribute("importRequest") ImportRequest importRequest,
             BindingResult bindingResult,
             @ModelAttribute("previewContext") PreviewContext previewContext,
-            Model model,
-            SessionStatus sessionStatus
+            Model model
     ) {
         if (previewContext.getParsedCsv() == null) {
             model.addAttribute("errorMessage", "No upload context found. Please upload the CSV again.");
@@ -209,7 +207,7 @@ public class UploadController {
             result = executeConfiguredFlow(importRequest, previewContext);
         }
         model.addAttribute("result", result);
-        sessionStatus.setComplete();
+        model.addAttribute("lastImportResult", result);
         return "result";
     }
 
