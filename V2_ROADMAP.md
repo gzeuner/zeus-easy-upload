@@ -93,11 +93,11 @@ Target architecture:
 ### GitHub issue alignment (checked 2026-08-06)
 
 The closed issues confirm the completed foundation: #3, #4, #8, #38 and
-#42-#44 are reflected in the current connector, metadata, mapping and test
-architecture. Issue #12 (CSV encoding/delimiter/quote settings) was completed
-by PR #49 and is ready to be closed. Issue #10 (CSV/JSON error reports) is the
-current implementation slice. The remaining open issues are tracked below by
-their product package rather than treated as separate rewrites.
+#42-#46 are reflected in the current connector, metadata, mapping and test
+architecture. The V2 enablers #5-#10 and #12 are implemented as well. Issue
+#11 is covered by the opt-in Maven `it` profile and IBM i integration
+documentation. The remaining open issues are tracked below by their product
+package rather than treated as separate rewrites.
 
 ### Done: CSV-to-DB foundation
 
@@ -108,7 +108,7 @@ their product package rather than treated as separate rewrites.
 
 These items stay done. They are enabling work for the connector direction and should not be reopened.
 
-### In Progress: Architecture evolution
+### Done: Architecture evolution
 
 The active architecture priority is to add a minimal connector seam without breaking the existing workflow.
 
@@ -122,14 +122,13 @@ The active architecture priority is to add a minimal connector seam without brea
 - DB target connector
 - Adapt current CSV -> DB execution to `DataFlow`
 - Connector configuration model (`#44`)
+- DB source connector (`#45`)
+- CSV target/export connector (`#46`)
 
 ### Planned: Multi-connector roadmap
 
 After the minimal connector seam is in place, planned expansion areas are:
 
-- connector configuration model
-- DB source connector
-- CSV target/export connector
 - filesystem connector
 - FTP connector foundation
 - SFTP connector foundation
@@ -168,7 +167,10 @@ The existing V2 epic remains relevant, but it is no longer the only organizing t
 
 - `#2` V2: Produktiv-Workflow (Mapping + Upsert + Async + API + Profiles)
 
-### Still open from the V2 backlog
+### Completed V2 backlog
+
+All items in the original V2 backlog are implemented in the current backend
+foundation; UI polish and durable job-history storage remain follow-up work.
 
 - `#5` Import-Profile speichern & laden
 - `#6` Async Import mit Progress-Bar (UI)
