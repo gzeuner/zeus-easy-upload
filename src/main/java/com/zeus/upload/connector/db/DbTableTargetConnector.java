@@ -41,7 +41,8 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
                     parsedCsv,
                     configuration.getDbColumns(),
                     configuration.getMappings(),
-                    configuration.getKeyColumns()
+                    configuration.getKeyColumns(),
+                    configuration.isDryRun()
             );
             return;
         }
@@ -51,7 +52,8 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
                 configuration.getTableName(),
                 parsedCsv,
                 configuration.getDbColumns(),
-                configuration.getMappings()
+                configuration.getMappings(),
+                configuration.isDryRun()
         );
     }
 
@@ -75,6 +77,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
         importRequest.setLibrary(configuration.getLibrary());
         importRequest.setTableName(configuration.getTableName());
         importRequest.setDropAndRecreate(configuration.isDropAndRecreate());
+        importRequest.setDryRun(configuration.isDryRun());
         importRequest.setColumns(configuration.getColumns());
         return importRequest;
     }
