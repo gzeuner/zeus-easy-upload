@@ -64,7 +64,8 @@ that preserves record field order, quotes values safely and creates parent
 directories as needed.
 
 The database source connector is now available as a neutral-record source,
-enabling DB-to-CSV and DB-to-DB flows through the existing `DataFlow` seam.
+enabling DB-to-CSV and DB-to-DB flows through the existing `DataFlow` seam. Its
+JDBC rows are streamed with bounded fetch size and lifecycle-safe cleanup.
 
 ## Product Direction
 
