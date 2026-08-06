@@ -52,6 +52,9 @@ The first Phase 1 operation slice is also implemented: existing-table flows
 now expose Insert, Update, Upsert/Merge and Delete. Update and Delete require
 explicit key mappings and are covered by H2 integration tests.
 
+Import profiles are now available through `/api/profiles` as validated JSON
+files, including list, load, save and delete operations.
+
 ## Product Direction
 
 `zeus-easy-upload` is no longer just a CSV-to-DB prototype. The current application already supports:
