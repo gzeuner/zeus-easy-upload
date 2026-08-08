@@ -1,4 +1,4 @@
-﻿# zeus-easy-upload
+# zeus-easy-upload
 
 Spring-Boot-Webanwendung zum Import beliebiger CSV-Dateien in IBM i DB2/400 Tabellen.
 
@@ -26,6 +26,8 @@ Version 1 Fokus:
 Aktueller First-Class-Flow:
 
 - CSV -> DB table
+- filesystem CSV source/target for bounded local staging
+- REST JSON source/target with explicit deployment and security policy
 
 Minimale Architektur in der aktuellen Iteration:
 
@@ -40,14 +42,10 @@ Wichtig:
 - vorhandene Services fuer Parsing, Mapping, Metadata und Import bleiben das Rueckgrat der Implementierung
 - die Connector-Abstraktion ist bewusst inkrementell und noch kein Plugin-System
 
-Geplante naechste Connector-Richtungen:
+Naechste Connector-Richtungen:
 
-- DB source
-- CSV export / target
 - FTP
 - SFTP
-- REST
-- filesystem
 - cloud/object storage
 
 ## Voraussetzungen
@@ -81,7 +79,26 @@ app:
   default-library: BIB
   sample-rows: 200
   batch-size: 500
+  connection-profile-directory: connections
+  connection-master-key: ${ZEUS_CONNECTION_MASTER_KEY:}
 ```
+
+## GUI und Verbindungsprofile
+
+Die Anwendung bietet unter /connections eine erweiterbare GUI fuer DB2/400- und
+REST-Verbindungsprofile. Profile enthalten nur Metadaten; Zugangsdaten werden
+mit AES-256-GCM verschluesselt. Der Master-Key wird ausschliesslich ueber
+ZEUS_CONNECTION_MASTER_KEY oder app.connection-master-key bereitgestellt.
+
+Fuer lokale Entwicklungsprofile kann APP_CONNECTION_PROFILE_DIRECTORY=.local/connections
+gesetzt werden. Das Verzeichnis .local/ ist absichtlich git-ignoriert und darf
+nicht versioniert werden. Der Master-Key muss ausserhalb des Repositories
+gesichert werden.
+
+IBM-i JDBC-URLs duerfen Treiberattribute wie translate binary=true enthalten;
+diese URL wird zur Validierung sicher behandelt und unveraendert an den Treiber
+weitergegeben. Die Verbindungsauswahl aus gespeicherten Profilen und ein
+dedizierter GUI-Verbindungstest sind noch separate Erweiterungspakete.
 
 ## IBM i JDBC Hinweise
 
@@ -130,7 +147,10 @@ Regeln:
 
 ## Tests
 
-Enthaltene Unit-Tests:
+Enthaltene Tests decken neben dem Importkern auch Filesystem- und REST-Connectoren,
+verschluesselte Verbindungsprofile sowie GUI-nahe Profilvalidierung ab.
+
+Beispielhafte Unit-Tests:
 - `ColumnNameSanitizerTest`
 - `TypeInferenceServiceTest`
 - `DecimalDetectionTest`

@@ -5,14 +5,14 @@
 Product goal: turn the current CSV-to-DB flow into a safe, comfortable mass-data
 processing workspace with automatic mapping and precise manual control.
 
-### Phase 0 — Safe foundation (current)
+### Phase 0 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Safe foundation (current)
 
 - Preserve the existing CSV -> DB2/400 workflow.
 - Make every write operation previewable via a transaction-backed dry run.
 - Expose a neutral operation model in the flow configuration.
 - Keep validation, mapping and execution results explicit and testable.
 
-### Phase 1 — Mass-data MVP
+### Phase 1 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Mass-data MVP
 
 - CSV and Excel upload with encoding, delimiter and quote options.
 - Insert, update, upsert/merge and delete operations.
@@ -20,14 +20,14 @@ processing workspace with automatic mapping and precise manual control.
 - Key-column selection, transformations and null/empty-value policies.
 - Preview of affected rows, validation errors and conflict handling.
 
-### Phase 2 — Repeatable workflows
+### Phase 2 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Repeatable workflows
 
 - Save and load import profiles.
 - Background jobs with progress, cancellation and retry.
 - Job history, downloadable error reports and audit trail.
 - API endpoints for starting and inspecting jobs.
 
-### Phase 3 — Connectors and automation
+### Phase 3 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Connectors and automation
 
 - Database sources and targets beyond the initial DB2/400 connector.
 - REST, filesystem, FTP/SFTP and object-storage connectors.
@@ -61,7 +61,8 @@ and cancellation endpoints. The browser progress-bar can build on this API.
 
 The connector foundation now also includes a configurable UTF-8 CSV target
 that preserves record field order, quotes values safely and creates parent
-directories as needed.
+directories as needed. It can stream records when a header order is supplied,
+avoiding full result materialization for large exports.
 
 The database source connector is now available as a neutral-record source,
 enabling DB-to-CSV and DB-to-DB flows through the existing `DataFlow` seam. Its
@@ -130,10 +131,10 @@ The active architecture priority is to add a minimal connector seam without brea
 
 After the minimal connector seam is in place, planned expansion areas are:
 
-- filesystem connector
+- filesystem connector (implemented)
 - FTP connector foundation
 - SFTP connector foundation
-- REST connector foundation
+- REST connector foundation (implemented)
 - cloud/object storage connector foundation
 
 Issue #47 is now covered by the protocol connector foundation document. The
@@ -179,7 +180,7 @@ foundation; UI polish and durable job-history storage remain follow-up work.
 
 - `#5` Import-Profile speichern & laden
 - `#6` Async Import mit Progress-Bar (UI)
-- `#7` REST API zusätzlich zur GUI
+- `#7` REST API zusÃƒÆ’Ã‚Â¤tzlich zur GUI
 - `#9` Import Job Tracking + Progress Persistence
 - `#10` Fehlerreport Export (CSV/JSON Download)
 - `#11` Integrations-Test-Setup (Profile "it") + Doku IBM i
@@ -239,3 +240,35 @@ Add additional connectors incrementally after the seam is proven:
 - No generic runtime connector registry is planned in this phase
 - The current UI and current import behavior must remain intact
 - Existing logic should be wrapped first and only extracted further when a second real connector pair justifies it
+
+## Filesystem connector package
+
+The first concrete protocol package is implemented for local staging:
+
+- filesystem CSV source and target configurations with explicit root, path, charset, delimiter and quote
+- normalized root resolution that rejects absolute paths and traversal outside the configured root
+- lazy CSV source streaming with lifecycle-safe stream cleanup
+- nested-directory creation and streaming CSV target output through the existing writer
+- factory registration and unit tests for round-trip behavior, escaping and path safety
+
+## REST connector package
+
+The first REST connector package is implemented against the REST policy:
+
+- allowlisted HTTP(S) endpoints with production HTTPS enforcement and private-address protection
+- runtime Bearer/Basic secrets, bounded retries, timeouts and response/request limits
+- JSON source with page-number and cursor pagination
+- JSON target with bounded POST/PUT batches and idempotency headers
+- deterministic in-process HTTP emulator tests without external network access
+
+## GUI foundation and connection profiles
+
+The first GUI foundation is implemented as an additive Thymeleaf surface:
+
+- shared visual tokens and navigation entry point for the import and connection areas
+- connection profile page with create, load, list and delete interactions
+- DB2/400 and REST endpoint configuration fields
+- AES-256-GCM encrypted credentials with an externally supplied Base64 master key
+- metadata-only API responses and preservation of existing secrets on empty edits
+
+Runtime connector selection from saved profiles and a dedicated connection-test action remain separate follow-up packages.
