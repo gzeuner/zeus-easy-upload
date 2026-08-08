@@ -5,7 +5,6 @@ import com.zeus.upload.flow.CsvTargetConfiguration;
 import com.zeus.upload.flow.DataRecord;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -34,7 +33,7 @@ public class CsvTargetConnector implements TargetConnector {
             if (configuration.getOutputFile().getParent() != null) {
                 Files.createDirectories(configuration.getOutputFile().getParent());
             }
-            try (BufferedWriter writer = Files.newBufferedWriter(configuration.getOutputFile(), StandardCharsets.UTF_8)) {
+            try (BufferedWriter writer = Files.newBufferedWriter(configuration.getOutputFile(), configuration.getCharset())) {
                 writeRow(writer, headers);
                 if (firstRecord != null) writeRecord(writer, headers, firstRecord);
                 while (iterator.hasNext()) {

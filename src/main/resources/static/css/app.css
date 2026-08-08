@@ -1,0 +1,11 @@
+:root {
+    --zeus-ink: #172033;
+    --zeus-muted: #6b7280;
+    --zeus-accent: #3157d5;
+}
+
+body { color: var(--zeus-ink); }
+.app-page { max-width: 1440px; }
+.app-card { border: 0; border-radius: 1rem; box-shadow: 0 .35rem 1.2rem rgba(23, 32, 51, .08); }
+.eyebrow { color: var(--zeus-accent); font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.list-group-item-action { cursor: pointer; }

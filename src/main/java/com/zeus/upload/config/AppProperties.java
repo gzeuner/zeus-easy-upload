@@ -23,6 +23,10 @@ public class AppProperties {
 
     private String profileDirectory = "profiles";
 
+    private String connectionProfileDirectory = "connections";
+
+    private String connectionMasterKey = "";
+
     public String getDefaultLibrary() {
         return defaultLibrary;
     }
@@ -53,5 +57,20 @@ public class AppProperties {
 
     public void setProfileDirectory(String profileDirectory) {
         this.profileDirectory = profileDirectory;
+    }
+    public String getConnectionProfileDirectory() {
+        return connectionProfileDirectory;
+    }
+
+    public void setConnectionProfileDirectory(String connectionProfileDirectory) {
+        this.connectionProfileDirectory = connectionProfileDirectory;
+    }
+
+    public String getConnectionMasterKey() {
+        return connectionMasterKey;
+    }
+
+    public void setConnectionMasterKey(String connectionMasterKey) {
+        this.connectionMasterKey = connectionMasterKey;
     }
 }

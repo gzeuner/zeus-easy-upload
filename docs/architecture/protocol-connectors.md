@@ -57,8 +57,13 @@ opt-in integration environments.
 
 ## Current status
 
-The neutral connector seam, CSV target, and database source are implemented.
-This document completes the architecture foundation for the protocol track.
-Concrete adapters should be delivered as separate, narrowly scoped packages
-once deployment policy and credential handling are available.
+The neutral connector seam, CSV target, database source, filesystem CSV
+source/target and REST JSON source/target are implemented. The filesystem
+adapter enforces a configured root and the REST adapter follows the deployment,
+allowlist, SSRF, limit, retry and idempotency rules in the REST connector policy.
+
+Together with the GUI foundation, the application now supports provider-neutral
+DB2/400 and REST connection profiles with AES-256-GCM protected credentials.
+Runtime connector selection, profile-backed execution and a dedicated GUI
+connection-test action remain follow-up packages.
 

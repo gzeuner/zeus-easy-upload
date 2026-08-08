@@ -7,3 +7,7 @@ spring:
   sql:
     init:
       mode: never
+
+app:
+  connection-profile-directory: ${java.io.tmpdir}/zeus-test-connections
+  connection-master-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
