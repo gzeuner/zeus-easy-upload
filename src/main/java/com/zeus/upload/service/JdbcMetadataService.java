@@ -12,7 +12,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -26,20 +25,26 @@ public class JdbcMetadataService implements MetadataService {
             .comparing((DbColumnMeta c) -> c.getOrdinalPosition() == null ? Integer.MAX_VALUE : c.getOrdinalPosition())
             .thenComparing(c -> c.getColumnName() == null ? "" : c.getColumnName());
 
-    private final DataSource dataSource;
+    private final DbSessionFactory dbSessionFactory;
 
-    public JdbcMetadataService(DataSource dataSource) {
-        this.dataSource = dataSource;
+    public JdbcMetadataService(DbSessionFactory dbSessionFactory) {
+        this.dbSessionFactory = dbSessionFactory;
     }
 
     @Override
     public List<DbTableRef> listTables(String library) {
+        return listTables(library, null);
+    }
+
+    @Override
+    public List<DbTableRef> listTables(String library, String connectionProfileName) {
         String normalizedLibrary = MetadataNormalizationUtil.normalizeLibrary(library);
         if (normalizedLibrary.isEmpty()) {
             return List.of();
         }
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (DbSession session = dbSessionFactory.open(connectionProfileName);
+             Connection connection = session.dataSource().getConnection()) {
             DatabaseMetaData metadata = connection.getMetaData();
             List<DbTableRef> result = fetchTables(metadata, normalizedLibrary, false);
 
@@ -48,7 +53,8 @@ public class JdbcMetadataService implements MetadataService {
             }
 
             if (result.isEmpty()) {
-                log.warn("No metadata tables found for library {}", normalizedLibrary);
+                log.warn("No metadata tables found for library {} (connection={})",
+                        normalizedLibrary, session.connectionProfileName());
             }
             return result;
         } catch (SQLException ex) {
@@ -59,13 +65,19 @@ public class JdbcMetadataService implements MetadataService {
 
     @Override
     public List<DbColumnMeta> listColumns(String library, String tableName) {
+        return listColumns(library, tableName, null);
+    }
+
+    @Override
+    public List<DbColumnMeta> listColumns(String library, String tableName, String connectionProfileName) {
         String normalizedLibrary = MetadataNormalizationUtil.normalizeLibrary(library);
         String normalizedTable = MetadataNormalizationUtil.normalizeTable(tableName);
         if (normalizedLibrary.isEmpty() || normalizedTable.isEmpty()) {
             return List.of();
         }
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (DbSession session = dbSessionFactory.open(connectionProfileName);
+             Connection connection = session.dataSource().getConnection()) {
             DatabaseMetaData metadata = connection.getMetaData();
             List<DbColumnMeta> columns = new ArrayList<>();
             try (ResultSet resultSet = metadata.getColumns(null, normalizedLibrary, normalizedTable, "%")) {
@@ -95,7 +107,8 @@ public class JdbcMetadataService implements MetadataService {
             }
 
             if (columns.isEmpty()) {
-                log.warn("No metadata columns found for {}.{}", normalizedLibrary, normalizedTable);
+                log.warn("No metadata columns found for {}.{} (connection={})",
+                        normalizedLibrary, normalizedTable, session.connectionProfileName());
                 return List.of();
             }
 

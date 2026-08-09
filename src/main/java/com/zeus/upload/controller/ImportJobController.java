@@ -61,6 +61,7 @@ public class ImportJobController {
             @RequestParam(required = false) String existingTableName,
             @RequestParam(required = false) List<String> keyColumns,
             @RequestParam(defaultValue = "false") boolean dryRun,
+            @RequestParam(required = false) String connectionProfileName,
             @RequestParam(required = false) String csvDelimiter,
             @RequestParam(required = false) String csvEncoding,
             @RequestParam(required = false) String csvQuote
@@ -83,11 +84,12 @@ public class ImportJobController {
         request.setCsvDelimiter(csvDelimiter);
         request.setCsvEncoding(csvEncoding);
         request.setCsvQuote(csvQuote);
+        request.setConnectionProfileName(connectionProfileName);
 
         PreviewContext context = new PreviewContext();
         context.setParsedCsv(parsed);
         if (existing) {
-            List<DbColumnMeta> columns = metadataService.listColumns(library, existingTableName);
+            List<DbColumnMeta> columns = metadataService.listColumns(library, existingTableName, connectionProfileName);
             context.setDbColumns(columns);
             context.setMappings(mappingService.autoMap(parsed, columns));
             request.setMappings(context.getMappings());

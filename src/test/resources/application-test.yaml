@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:zeus_easy_upload_test;MODE=DB2;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    url: jdbc:h2:mem:zeus_easy_upload_test;MODE=DB2;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -9,5 +9,7 @@ spring:
       mode: never
 
 app:
+  default-library: TESTLIB
   connection-profile-directory: ${java.io.tmpdir}/zeus-test-connections
+  # Test-only dummy key (not a production secret).
   connection-master-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

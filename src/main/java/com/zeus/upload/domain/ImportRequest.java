@@ -22,6 +22,11 @@ public class ImportRequest {
     private String csvEncoding;
     private String csvQuote;
     private String existingTableName;
+    /**
+     * Optional named JDBC connection profile. Blank uses the application bootstrap DataSource.
+     * Credentials are never stored on this request object.
+     */
+    private String connectionProfileName;
     private List<String> keyColumns = new ArrayList<>();
 
     @Valid
@@ -66,6 +71,14 @@ public class ImportRequest {
 
     public void setExistingTableName(String existingTableName) {
         this.existingTableName = existingTableName;
+    }
+
+    public String getConnectionProfileName() {
+        return connectionProfileName;
+    }
+
+    public void setConnectionProfileName(String connectionProfileName) {
+        this.connectionProfileName = connectionProfileName;
     }
 
     public boolean isUpsertEnabled() {

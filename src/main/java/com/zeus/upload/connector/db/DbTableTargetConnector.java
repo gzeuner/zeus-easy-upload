@@ -28,6 +28,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
     public void write(Stream<DataRecord> records) {
         ParsedCsv parsedCsv = new ParsedCsv();
         records.map(this::toRow).forEach(parsedCsv.getRows()::add);
+        String connection = configuration.getConnectionProfileName();
 
         if (configuration.getWriteMode() == DbTableWriteMode.CREATE_TABLE) {
             result = importService.importCsv(createImportRequest(), parsedCsv);
@@ -36,6 +37,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
 
         if (configuration.getWriteMode() == DbTableWriteMode.UPSERT_EXISTING) {
             result = importService.upsertIntoExistingTable(
+                    connection,
                     configuration.getLibrary(),
                     configuration.getTableName(),
                     parsedCsv,
@@ -49,6 +51,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
 
         if (configuration.getWriteMode() == DbTableWriteMode.UPDATE_EXISTING) {
             result = importService.updateIntoExistingTable(
+                    connection,
                     configuration.getLibrary(), configuration.getTableName(), parsedCsv,
                     configuration.getDbColumns(), configuration.getMappings(),
                     configuration.getKeyColumns(), configuration.isDryRun());
@@ -57,6 +60,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
 
         if (configuration.getWriteMode() == DbTableWriteMode.DELETE_EXISTING) {
             result = importService.deleteFromExistingTable(
+                    connection,
                     configuration.getLibrary(), configuration.getTableName(), parsedCsv,
                     configuration.getDbColumns(), configuration.getMappings(),
                     configuration.getKeyColumns(), configuration.isDryRun());
@@ -64,6 +68,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
         }
 
         result = importService.importIntoExistingTable(
+                connection,
                 configuration.getLibrary(),
                 configuration.getTableName(),
                 parsedCsv,
@@ -95,6 +100,7 @@ public class DbTableTargetConnector implements ImportResultAwareTargetConnector 
         importRequest.setDropAndRecreate(configuration.isDropAndRecreate());
         importRequest.setDryRun(configuration.isDryRun());
         importRequest.setColumns(configuration.getColumns());
+        importRequest.setConnectionProfileName(configuration.getConnectionProfileName());
         return importRequest;
     }
 }

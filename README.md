@@ -52,23 +52,42 @@ Naechste Connector-Richtungen:
 
 - Java 17
 - Maven 3.9+
-- Netzwerkzugriff auf IBM i
-- Benutzer mit Rechten zum:
-  - `CREATE TABLE`
-  - `DROP TABLE` (wenn Option aktiviert)
-  - `INSERT`
+- **Lokal (ohne IBM i):** nichts weiter — Profil `local` nutzt eingebettetes H2
+- **Gegen IBM i:** Netzwerkzugriff und Benutzer mit `CREATE TABLE` / optional `DROP TABLE` / `INSERT` / `UPDATE` / `DELETE` / `SELECT`
+
+## Lokale Entwicklung (H2, empfohlen ohne IBM i)
+
+```bash
+mvn -Plocal spring-boot:run
+```
+
+- App: `http://localhost:8080`
+- H2-Konsole: `http://localhost:8080/h2-console`
+- Default-Library/Schema: `TESTLIB`
+- Daten und Verbindungsprofile unter `.local/` (gitignored)
+
+CREATE TABLE, INSERT, UPDATE, DELETE und SELECT sind gegen H2 lauffaehig und
+durch Integrationstests abgedeckt. Details: [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).
+
+Multi-DB laeuft ueber einen erweiterbaren **`SqlDialect`-Layer** (nicht Hibernate):
+IBM i first-class, H2 lokal, PostgreSQL-Scaffold, Registry per JDBC-URL.
+Siehe [docs/architecture/sql-dialects.md](docs/architecture/sql-dialects.md).
+
+**Wichtig:** Niemals echte IBM-i-Credentials, Master-Keys oder interne
+Verbindungsdaten committen. JDBC-Zugang nur per Umgebungsvariablen
+(`SPRING_DATASOURCE_*`, `ZEUS_CONNECTION_MASTER_KEY`). Vorlage: `.env.example`.
 
 ## Konfiguration
 
-Datei: `src/main/resources/application.yaml`
+Datei: `src/main/resources/application.yaml` (Platzhalter via Env; keine Secrets im Repo)
 
 ```yaml
 spring:
   datasource:
-    driver-class-name: com.ibm.as400.access.AS400JDBCDriver
-    url: jdbc:as400://system/bib;translate binary=true
-    username: user
-    password: pass
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:com.ibm.as400.access.AS400JDBCDriver}
+    url: ${SPRING_DATASOURCE_URL:jdbc:as400://localhost/}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
 
   servlet:
     multipart:
@@ -76,12 +95,14 @@ spring:
       max-request-size: 50MB
 
 app:
-  default-library: BIB
+  default-library: ${APP_DEFAULT_LIBRARY:BIB}
   sample-rows: 200
   batch-size: 500
-  connection-profile-directory: connections
+  connection-profile-directory: ${APP_CONNECTION_PROFILE_DIRECTORY:connections}
   connection-master-key: ${ZEUS_CONNECTION_MASTER_KEY:}
 ```
+
+Profil `local`: `src/main/resources/application-local.yaml` (H2 file DB unter `.local/h2`).
 
 ## GUI und Verbindungsprofile
 
@@ -91,9 +112,9 @@ mit AES-256-GCM verschluesselt. Der Master-Key wird ausschliesslich ueber
 ZEUS_CONNECTION_MASTER_KEY oder app.connection-master-key bereitgestellt.
 
 Fuer lokale Entwicklungsprofile kann APP_CONNECTION_PROFILE_DIRECTORY=.local/connections
-gesetzt werden. Das Verzeichnis .local/ ist absichtlich git-ignoriert und darf
-nicht versioniert werden. Der Master-Key muss ausserhalb des Repositories
-gesichert werden.
+gesetzt werden (beim Profil `local` bereits der Default). Das Verzeichnis `.local/`
+ist git-ignoriert und darf nicht versioniert werden. Der Master-Key muss
+ausserhalb des Repositories gesichert werden.
 
 IBM-i JDBC-URLs duerfen Treiberattribute wie translate binary=true enthalten;
 diese URL wird zur Validierung sicher behandelt und unveraendert an den Treiber
@@ -104,15 +125,27 @@ dedizierter GUI-Verbindungstest sind noch separate Erweiterungspakete.
 
 - Schema entspricht `Library`.
 - SQL arbeitet mit `LIB.TABLE`.
-- Identifier werden in GroÃŸbuchstaben normalisiert.
+- Identifier werden in Grossbuchstaben normalisiert.
 - Spaltennamen werden auf `A-Z0-9_` reduziert.
-- SpaltenlÃ¤nge wird auf 10 Zeichen begrenzt (Trunkierung + Hash-Suffix).
+- Spaltenlaenge wird auf 10 Zeichen begrenzt (Trunkierung + Hash-Suffix).
 - Leere Strings werden als `NULL` gespeichert.
 
 ## Starten
 
+Lokal (H2):
+
 ```bash
 mvn clean package
+mvn -Plocal spring-boot:run
+```
+
+Gegen IBM i (Credentials nur ueber Env):
+
+```bash
+# PowerShell-Beispiel — Werte nicht committen
+$env:SPRING_DATASOURCE_URL = "jdbc:as400://host/LIB;translate binary=true"
+$env:SPRING_DATASOURCE_USERNAME = "..."
+$env:SPRING_DATASOURCE_PASSWORD = "..."
 mvn spring-boot:run
 ```
 
@@ -147,20 +180,20 @@ Regeln:
 
 ## Tests
 
-Enthaltene Tests decken neben dem Importkern auch Filesystem- und REST-Connectoren,
-verschluesselte Verbindungsprofile sowie GUI-nahe Profilvalidierung ab.
+Die Standard-Testsuite laeuft **ausschliesslich gegen H2** (Profil `test`) und
+benoetigt kein IBM i. Abgedeckt sind u. a.:
 
-Beispielhafte Unit-Tests:
-- `ColumnNameSanitizerTest`
-- `TypeInferenceServiceTest`
-- `DecimalDetectionTest`
-- `DateParsingTest`
-
-AusfÃ¼hren:
+- CREATE TABLE + INSERT, INSERT existing, UPDATE, DELETE, SELECT (`H2CrudLifecycleIntegrationTest`, `H2ImportIntegrationTest`)
+- DB Source/Target Connectoren
+- Filesystem- und REST-Connectoren
+- Verschluesselte Verbindungsprofile
+- Typinferenz und Mapping
 
 ```bash
 mvn test
 ```
+
+Optionale Live-Tests gegen IBM i: [docs/IBM_I_INTEGRATION.md](docs/IBM_I_INTEGRATION.md).
 
 ## Screenshots
 

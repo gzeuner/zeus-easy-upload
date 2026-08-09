@@ -11,6 +11,9 @@ import com.zeus.upload.domain.MappingValidationResult;
 import com.zeus.upload.domain.PreviewContext;
 import com.zeus.upload.flow.FlowConfigurationFactory;
 import com.zeus.upload.flow.FlowExecutionService;
+import com.zeus.upload.domain.ConnectionProfile;
+import com.zeus.upload.domain.ConnectionType;
+import com.zeus.upload.service.ConnectionProfileService;
 import com.zeus.upload.service.CsvParsingService;
 import com.zeus.upload.service.MappingService;
 import com.zeus.upload.service.MetadataService;
@@ -45,6 +48,7 @@ public class UploadController {
     private final AppProperties appProperties;
     private final FlowConfigurationFactory flowConfigurationFactory;
     private final FlowExecutionService flowExecutionService;
+    private final ConnectionProfileService connectionProfileService;
 
     public UploadController(
             CsvParsingService csvParsingService,
@@ -52,7 +56,8 @@ public class UploadController {
             MappingService mappingService,
             AppProperties appProperties,
             FlowConfigurationFactory flowConfigurationFactory,
-            FlowExecutionService flowExecutionService
+            FlowExecutionService flowExecutionService,
+            ConnectionProfileService connectionProfileService
     ) {
         this.csvParsingService = csvParsingService;
         this.metadataService = metadataService;
@@ -60,6 +65,7 @@ public class UploadController {
         this.appProperties = appProperties;
         this.flowConfigurationFactory = flowConfigurationFactory;
         this.flowExecutionService = flowExecutionService;
+        this.connectionProfileService = connectionProfileService;
     }
 
     @ModelAttribute("previewContext")
@@ -75,6 +81,7 @@ public class UploadController {
             model.addAttribute("importRequest", request);
         }
         model.addAttribute("supportedTypes", SUPPORTED_TYPES);
+        model.addAttribute("jdbcConnections", listJdbcConnections());
         return "index";
     }
 
@@ -86,6 +93,7 @@ public class UploadController {
             @RequestParam(value = "dropAndRecreate", defaultValue = "false") boolean dropAndRecreate,
             @RequestParam(value = "useExistingTable", defaultValue = "false") boolean useExistingTable,
             @RequestParam(value = "existingTableName", required = false) String existingTableName,
+            @RequestParam(value = "connectionProfileName", required = false) String connectionProfileName,
             @RequestParam(value = "csvDelimiter", required = false) String csvDelimiter,
             @RequestParam(value = "csvEncoding", required = false) String csvEncoding,
             @RequestParam(value = "csvQuote", required = false) String csvQuote,
@@ -124,9 +132,13 @@ public class UploadController {
             request.setCsvDelimiter(csvDelimiter);
             request.setCsvEncoding(csvEncoding);
             request.setCsvQuote(csvQuote);
+            if (StringUtils.hasText(connectionProfileName)) {
+                request.setConnectionProfileName(connectionProfileName.trim());
+            }
 
             if (useExistingTable && StringUtils.hasText(existingTableName)) {
-                List<DbColumnMeta> dbColumns = metadataService.listColumns(library, existingTableName);
+                List<DbColumnMeta> dbColumns = metadataService.listColumns(
+                        library, existingTableName, request.getConnectionProfileName());
                 List<ColumnMapping> mappings = mappingService.autoMap(parsed, dbColumns);
                 request.setMappings(copyMappings(mappings));
                 previewContext.setDbColumns(dbColumns);
@@ -239,6 +251,17 @@ public class UploadController {
         return !StringUtils.hasText(options.getDelimiter())
                 && (!StringUtils.hasText(options.getEncoding()) || "UTF-8".equalsIgnoreCase(options.getEncoding()))
                 && (!StringUtils.hasText(options.getQuote()) || "\"".equals(options.getQuote()));
+    }
+
+    private List<ConnectionProfile> listJdbcConnections() {
+        try {
+            return connectionProfileService.list().stream()
+                    .filter(profile -> profile.getType() == ConnectionType.DB2_400)
+                    .toList();
+        } catch (IOException ex) {
+            log.warn("Could not list connection profiles: {}", ex.getMessage());
+            return List.of();
+        }
     }
 
     private List<ColumnMapping> copyMappings(List<ColumnMapping> source) {

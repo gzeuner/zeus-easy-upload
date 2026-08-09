@@ -52,6 +52,20 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="mb-3">
+                            <label for="connectionProfileName" class="form-label">Database connection</label>
+                            <select class="form-select" id="connectionProfileName" name="connectionProfileName">
+                                <option value="">Default (application DataSource)</option>
+                                <option th:each="conn : ${jdbcConnections}"
+                                        th:value="${conn.name}"
+                                        th:text="${conn.name + ' — ' + conn.endpoint}"
+                                        th:selected="${importRequest.connectionProfileName == conn.name}"></option>
+                            </select>
+                            <div class="form-text">
+                                Optional named profile from <a th:href="@{/connections}">Verbindungen</a>.
+                                Secrets stay encrypted; never enter passwords here.
+                            </div>
+                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="library" class="form-label">Library (Schema)</label>
@@ -92,6 +106,7 @@
 <script>
     (() => {
         const libraryInput = document.getElementById("library");
+        const connectionSelect = document.getElementById("connectionProfileName");
         const useExistingTable = document.getElementById("useExistingTable");
         const existingTableSelect = document.getElementById("existingTableSelect");
         const status = document.getElementById("existingTableStatus");
@@ -132,7 +147,12 @@
 
             status.textContent = "Loading tables...";
             try {
-                const response = await fetch(`/meta/tables?library=${encodeURIComponent(library)}`);
+                let url = `/meta/tables?library=${encodeURIComponent(library)}`;
+                const connection = connectionSelect && connectionSelect.value ? connectionSelect.value.trim() : "";
+                if (connection) {
+                    url += `&connectionProfileName=${encodeURIComponent(connection)}`;
+                }
+                const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error("Metadata endpoint returned " + response.status);
                 }
