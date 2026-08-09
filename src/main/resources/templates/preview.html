@@ -63,11 +63,11 @@
                     </div>
                     <div class="col-md-4 d-flex align-items-end mb-3" th:if="${importRequest.useExistingTable}">
                         <div class="small">
-                            <span class="badge text-bg-primary">Existing table INSERT</span>
+                            <span class="badge text-bg-primary" id="existingModeBadge">Existing table</span>
                             <div class="text-muted mt-1">
-                                Map &amp; insert into
+                                <span id="existingModeHint">Map columns and run the selected operation.</span>
+                                Target:
                                 <span th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
-                                with typed conversion
                             </div>
                         </div>
                     </div>
@@ -266,12 +266,63 @@
     (() => {
         const select = document.getElementById('operationSelect');
         const hidden = document.getElementById('operationValue');
+        const badge = document.getElementById('existingModeBadge');
+        const hint = document.getElementById('existingModeHint');
+        const keyHelp = document.querySelector('label[for="operationSelect"]')?.parentElement?.querySelector('.form-text');
         if (!select || !hidden) return;
+
+        const describe = (op) => {
+            switch ((op || 'INSERT').toUpperCase()) {
+                case 'UPDATE':
+                    return {
+                        badge: 'Existing table UPDATE',
+                        badgeClass: 'text-bg-warning',
+                        hint: 'Keys identify rows; non-key mapped columns are updated.',
+                        keyHelp: 'Select key columns that uniquely identify rows to update.'
+                    };
+                case 'DELETE':
+                    return {
+                        badge: 'Existing table DELETE',
+                        badgeClass: 'text-bg-danger',
+                        hint: 'Only key columns are required; matching rows will be deleted.',
+                        keyHelp: 'Select key columns that uniquely identify rows to delete.'
+                    };
+                case 'UPSERT':
+                    return {
+                        badge: 'Existing table UPSERT',
+                        badgeClass: 'text-bg-info',
+                        hint: 'Insert or merge by key columns (engine-dependent).',
+                        keyHelp: 'Keys define the match for upsert / merge.'
+                    };
+                default:
+                    return {
+                        badge: 'Existing table INSERT',
+                        badgeClass: 'text-bg-primary',
+                        hint: 'Map columns and insert new rows with typed conversion.',
+                        keyHelp: 'Keys are optional for plain INSERT.'
+                    };
+            }
+        };
+
+        const applyOperationUi = () => {
+            const op = select.value || 'INSERT';
+            hidden.value = op;
+            const info = describe(op);
+            if (badge) {
+                badge.textContent = info.badge;
+                badge.className = 'badge ' + info.badgeClass;
+            }
+            if (hint) {
+                hint.textContent = info.hint;
+            }
+            if (keyHelp) {
+                keyHelp.textContent = info.keyHelp;
+            }
+        };
+
         select.value = hidden.value || 'INSERT';
-        select.addEventListener('change', () => {
-            hidden.value = select.value;
-        });
-        hidden.value = select.value;
+        select.addEventListener('change', applyOperationUi);
+        applyOperationUi();
     })();
 </script>
 </body>
