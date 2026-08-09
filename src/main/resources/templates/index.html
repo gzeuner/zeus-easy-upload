@@ -14,7 +14,7 @@
         <div class="col-lg-8">
             <div class="card shadow-sm">
                 <div class="card-header">
-                    <h4 class="mb-0">CSV Upload for IBM i DB2/400</h4>
+                    <h4 class="mb-0">CSV Import</h4>
                 </div>
                 <div class="card-body">
                     <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
@@ -22,6 +22,26 @@
                         <div class="mb-3">
                             <label for="file" class="form-label">CSV File</label>
                             <input class="form-control" id="file" name="file" type="file" accept=".csv,text/csv" required>
+                        </div>
+                        <div class="card border-0 bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="mb-3">Import mode</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="importMode" id="modeCreate"
+                                           value="create" checked>
+                                    <label class="form-check-label" for="modeCreate">
+                                        <strong>Neue Tabelle anlegen</strong> — Typen vorschlagen, CREATE TABLE + INSERT
+                                    </label>
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="radio" name="importMode" id="modeExisting"
+                                           value="existing">
+                                    <label class="form-check-label" for="modeExisting">
+                                        <strong>In vorhandene Tabelle schreiben</strong> — Spalten mappen, typisiert INSERT
+                                    </label>
+                                </div>
+                                <input type="hidden" name="useExistingTable" id="useExistingTable" value="false">
+                            </div>
                         </div>
                         <div class="card border-0 bg-light mb-4">
                             <div class="card-body">
@@ -71,22 +91,18 @@
                                 <label for="library" class="form-label">Library (Schema)</label>
                                 <input class="form-control" id="library" name="library" th:value="${importRequest.library}" required>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="tableName" class="form-label">Table Name</label>
-                                <input class="form-control" id="tableName" name="tableName" th:value="${importRequest.tableName}" required>
+                            <div class="col-md-6 mb-3" id="createTableNameGroup">
+                                <label for="tableName" class="form-label">New table name</label>
+                                <input class="form-control" id="tableName" name="tableName" th:value="${importRequest.tableName}">
                             </div>
                         </div>
-                        <div class="form-check mb-4">
+                        <div class="form-check mb-4" id="dropAndRecreateGroup">
                             <input class="form-check-input" type="checkbox" id="dropAndRecreate" name="dropAndRecreate">
                             <label class="form-check-label" for="dropAndRecreate">Drop table before create</label>
                         </div>
-                        <div class="card border-0 bg-light mb-4">
+                        <div class="card border-0 bg-light mb-4 d-none" id="existingTableGroup">
                             <div class="card-body">
-                                <h6 class="mb-3">Existing table (optional)</h6>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="useExistingTable" name="useExistingTable" value="true">
-                                    <label class="form-check-label" for="useExistingTable">Use existing DB2 table metadata</label>
-                                </div>
+                                <h6 class="mb-3">Ziel-Tabelle</h6>
                                 <div class="mb-2">
                                     <label for="existingTableSelect" class="form-label">Existing table</label>
                                     <select class="form-select" id="existingTableSelect" name="existingTableName" disabled>
@@ -110,10 +126,40 @@
         const useExistingTable = document.getElementById("useExistingTable");
         const existingTableSelect = document.getElementById("existingTableSelect");
         const status = document.getElementById("existingTableStatus");
+        const modeCreate = document.getElementById("modeCreate");
+        const modeExisting = document.getElementById("modeExisting");
+        const createTableNameGroup = document.getElementById("createTableNameGroup");
+        const dropAndRecreateGroup = document.getElementById("dropAndRecreateGroup");
+        const existingTableGroup = document.getElementById("existingTableGroup");
+        const tableNameInput = document.getElementById("tableName");
 
         if (!libraryInput || !useExistingTable || !existingTableSelect || !status) {
             return;
         }
+
+        const isExistingMode = () => modeExisting && modeExisting.checked;
+
+        const applyModeUi = () => {
+            const existing = isExistingMode();
+            useExistingTable.value = existing ? "true" : "false";
+            if (createTableNameGroup) {
+                createTableNameGroup.classList.toggle("d-none", existing);
+            }
+            if (dropAndRecreateGroup) {
+                dropAndRecreateGroup.classList.toggle("d-none", existing);
+            }
+            if (existingTableGroup) {
+                existingTableGroup.classList.toggle("d-none", !existing);
+            }
+            if (tableNameInput) {
+                tableNameInput.required = !existing;
+            }
+            if (existing) {
+                fetchTables();
+            } else {
+                resetSelect("");
+            }
+        };
 
         const resetSelect = (message) => {
             existingTableSelect.innerHTML = "<option value=''>Select table...</option>";
@@ -134,7 +180,7 @@
         };
 
         const fetchTables = async () => {
-            if (!useExistingTable.checked) {
+            if (!isExistingMode()) {
                 resetSelect("");
                 return;
             }
@@ -163,14 +209,25 @@
             }
         };
 
-        useExistingTable.addEventListener("change", fetchTables);
+        if (modeCreate) {
+            modeCreate.addEventListener("change", applyModeUi);
+        }
+        if (modeExisting) {
+            modeExisting.addEventListener("change", applyModeUi);
+        }
         libraryInput.addEventListener("change", () => {
-            if (useExistingTable.checked) {
+            if (isExistingMode()) {
                 fetchTables();
             }
         });
-
-        resetSelect("");
+        if (connectionSelect) {
+            connectionSelect.addEventListener("change", () => {
+                if (isExistingMode()) {
+                    fetchTables();
+                }
+            });
+        }
+        applyModeUi();
     })();
 </script>
 </body>

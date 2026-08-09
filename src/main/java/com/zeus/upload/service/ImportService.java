@@ -46,6 +46,7 @@ public class ImportService {
     private final DataSource dataSource;
     private final DdlService ddlService;
     private final TypeInferenceService typeInferenceService;
+    private final ValueConversionService valueConversionService;
     private final AppProperties appProperties;
     private final SqlDialect sqlDialect;
 
@@ -57,7 +58,9 @@ public class ImportService {
             AppProperties appProperties,
             SqlDialect sqlDialect
     ) {
-        this(null, new ColumnNameSanitizer(), dataSource, ddlService, typeInferenceService, appProperties, sqlDialect);
+        this(null, new ColumnNameSanitizer(), dataSource, ddlService, typeInferenceService,
+                typeInferenceService == null ? null : new ValueConversionService(typeInferenceService),
+                appProperties, sqlDialect);
     }
 
     @Autowired
@@ -67,6 +70,7 @@ public class ImportService {
             DataSource dataSource,
             DdlService ddlService,
             TypeInferenceService typeInferenceService,
+            ValueConversionService valueConversionService,
             AppProperties appProperties,
             SqlDialect sqlDialect
     ) {
@@ -75,6 +79,9 @@ public class ImportService {
         this.dataSource = dataSource;
         this.ddlService = ddlService;
         this.typeInferenceService = typeInferenceService;
+        this.valueConversionService = valueConversionService == null && typeInferenceService != null
+                ? new ValueConversionService(typeInferenceService)
+                : valueConversionService;
         this.appProperties = appProperties;
         this.sqlDialect = sqlDialect;
     }
@@ -203,10 +210,12 @@ public class ImportService {
         }
 
         String insertSql = buildInsertSql(session.dialect(), library, tableName, effectiveMappings);
+        Map<String, DbColumnMeta> columnsByName = dbColumnMetaByName(dbColumns);
 
         try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
-            int insertedRows = executeExistingTableInserts(connection, insertSql, effectiveMappings, csv.getRows(), errors);
+            int insertedRows = executeExistingTableInserts(
+                    connection, insertSql, effectiveMappings, columnsByName, csv.getRows(), errors);
             if (!errors.isEmpty()) {
                 connection.rollback();
                 throw new ImportException("Import aborted due to insert errors", errors);
@@ -693,6 +702,7 @@ public class ImportService {
             Connection connection,
             String insertSql,
             List<ColumnMapping> mappings,
+            Map<String, DbColumnMeta> columnsByName,
             List<List<String>> rows,
             List<ParseError> errors
     ) throws SQLException {
@@ -703,18 +713,25 @@ public class ImportService {
         try (PreparedStatement statement = connection.prepareStatement(insertSql)) {
             for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
                 List<String> row = rows.get(rowIndex);
-                bindMappedRow(statement, mappings, row);
+                try {
+                    bindMappedRow(statement, mappings, columnsByName, row);
+                } catch (Exception ex) {
+                    errors.add(new ParseError(rowIndex + 2L, "", "", ex.getMessage()));
+                    continue;
+                }
                 statement.addBatch();
                 pendingRows.add(new RowBinding(rowIndex, row));
 
                 if (pendingRows.size() >= batchSize) {
-                    insertedRows += executeBatchWithFallback(statement, connection, insertSql, mappings, pendingRows, errors);
+                    insertedRows += executeBatchWithFallback(
+                            statement, connection, insertSql, mappings, columnsByName, pendingRows, errors);
                     pendingRows.clear();
                 }
             }
 
             if (!pendingRows.isEmpty()) {
-                insertedRows += executeBatchWithFallback(statement, connection, insertSql, mappings, pendingRows, errors);
+                insertedRows += executeBatchWithFallback(
+                        statement, connection, insertSql, mappings, columnsByName, pendingRows, errors);
             }
         }
         return insertedRows;
@@ -725,6 +742,7 @@ public class ImportService {
             Connection connection,
             String insertSql,
             List<ColumnMapping> mappings,
+            Map<String, DbColumnMeta> columnsByName,
             List<RowBinding> pendingRows,
             List<ParseError> errors
     ) throws SQLException {
@@ -733,7 +751,7 @@ public class ImportService {
             return pendingRows.size();
         } catch (BatchUpdateException ex) {
             log.warn("Batch insert failed, falling back to row-by-row execution: {}", ex.getMessage());
-            return executeRowsIndividually(connection, insertSql, mappings, pendingRows, errors);
+            return executeRowsIndividually(connection, insertSql, mappings, columnsByName, pendingRows, errors);
         }
     }
 
@@ -741,6 +759,7 @@ public class ImportService {
             Connection connection,
             String insertSql,
             List<ColumnMapping> mappings,
+            Map<String, DbColumnMeta> columnsByName,
             List<RowBinding> pendingRows,
             List<ParseError> errors
     ) throws SQLException {
@@ -748,7 +767,7 @@ public class ImportService {
         try (PreparedStatement single = connection.prepareStatement(insertSql)) {
             for (RowBinding pendingRow : pendingRows) {
                 try {
-                    bindMappedRow(single, mappings, pendingRow.rowValues());
+                    bindMappedRow(single, mappings, columnsByName, pendingRow.rowValues());
                     single.executeUpdate();
                     inserted++;
                 } catch (Exception ex) {
@@ -797,19 +816,49 @@ public class ImportService {
         return processedRows;
     }
 
-    private void bindMappedRow(PreparedStatement statement, List<ColumnMapping> mappings, List<String> row) throws SQLException {
+    private void bindMappedRow(
+            PreparedStatement statement,
+            List<ColumnMapping> mappings,
+            Map<String, DbColumnMeta> columnsByName,
+            List<String> row
+    ) throws SQLException {
         statement.clearParameters();
         for (int mappingIndex = 0; mappingIndex < mappings.size(); mappingIndex++) {
             ColumnMapping mapping = mappings.get(mappingIndex);
             int csvIndex = mapping.getCsvIndex();
             String value = csvIndex < row.size() ? row.get(csvIndex) : null;
-            String trimmed = value == null ? null : value.trim();
-            if (!StringUtils.hasText(trimmed)) {
-                statement.setNull(mappingIndex + 1, Types.VARCHAR);
+            DbColumnMeta meta = columnsByName == null
+                    ? null
+                    : columnsByName.get(normalizeColumnName(mapping.getTargetColumn()));
+            ValueConversionService.SqlTypeFamily family = valueConversionService == null
+                    ? ValueConversionService.SqlTypeFamily.VARCHAR
+                    : valueConversionService.familyFrom(
+                            meta == null ? null : meta.getTypeName(),
+                            meta == null ? null : meta.getJdbcType());
+            if (valueConversionService != null) {
+                valueConversionService.bind(statement, mappingIndex + 1, value, family);
             } else {
-                statement.setString(mappingIndex + 1, trimmed);
+                String trimmed = value == null ? null : value.trim();
+                if (!StringUtils.hasText(trimmed)) {
+                    statement.setNull(mappingIndex + 1, Types.VARCHAR);
+                } else {
+                    statement.setString(mappingIndex + 1, trimmed);
+                }
             }
         }
+    }
+
+    private Map<String, DbColumnMeta> dbColumnMetaByName(List<DbColumnMeta> dbColumns) {
+        Map<String, DbColumnMeta> map = new LinkedHashMap<>();
+        if (dbColumns == null) {
+            return map;
+        }
+        for (DbColumnMeta column : dbColumns) {
+            if (column != null && StringUtils.hasText(column.getColumnName())) {
+                map.put(normalizeColumnName(column.getColumnName()), column);
+            }
+        }
+        return map;
     }
 
     private void bindMergeRow(
@@ -878,44 +927,20 @@ public class ImportService {
 
     private void bindValue(PreparedStatement statement, int parameterIndex, ColumnProposal column, String rawValue)
             throws SQLException {
-        String trimmed = rawValue == null ? "" : rawValue.trim();
-        if (trimmed.isEmpty()) {
-            statement.setNull(parameterIndex, sqlType(column.getSqlType()));
+        ValueConversionService.SqlTypeFamily family = valueConversionService == null
+                ? ValueConversionService.SqlTypeFamily.VARCHAR
+                : valueConversionService.familyFromSqlType(column.getSqlType());
+        if (valueConversionService != null) {
+            valueConversionService.bind(statement, parameterIndex, rawValue, family);
             return;
         }
-
-        String sqlType = column.getSqlType().toUpperCase();
-        switch (sqlType) {
-            case "INTEGER" -> statement.setInt(parameterIndex, Integer.parseInt(trimmed));
-            case "BIGINT" -> statement.setLong(parameterIndex, Long.parseLong(trimmed));
-            case "DECIMAL" -> statement.setBigDecimal(parameterIndex, new BigDecimal(trimmed.replace(',', '.')));
-            case "DATE" -> {
-                LocalDate date = typeInferenceService.parseDate(trimmed);
-                if (date == null) {
-                    throw new IllegalArgumentException("Invalid date value");
-                }
-                statement.setDate(parameterIndex, Date.valueOf(date));
-            }
-            case "TIMESTAMP" -> {
-                LocalDateTime timestamp = typeInferenceService.parseTimestamp(trimmed);
-                if (timestamp == null) {
-                    throw new IllegalArgumentException("Invalid timestamp value");
-                }
-                statement.setTimestamp(parameterIndex, Timestamp.valueOf(timestamp));
-            }
-            default -> statement.setString(parameterIndex, trimmed);
+        // Fallback for unit tests without conversion service
+        String trimmed = rawValue == null ? "" : rawValue.trim();
+        if (trimmed.isEmpty()) {
+            statement.setNull(parameterIndex, Types.VARCHAR);
+        } else {
+            statement.setString(parameterIndex, trimmed);
         }
-    }
-
-    private int sqlType(String type) {
-        return switch (type.toUpperCase()) {
-            case "INTEGER" -> Types.INTEGER;
-            case "BIGINT" -> Types.BIGINT;
-            case "DECIMAL" -> Types.DECIMAL;
-            case "DATE" -> Types.DATE;
-            case "TIMESTAMP" -> Types.TIMESTAMP;
-            default -> Types.VARCHAR;
-        };
     }
 
     private record RowBinding(int rowIndex, List<String> rowValues) {

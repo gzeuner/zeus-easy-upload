@@ -4,6 +4,7 @@ import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.domain.DbColumnMeta;
 import com.zeus.upload.domain.MappingValidationResult;
 import com.zeus.upload.domain.ParsedCsv;
+import com.zeus.upload.service.ValueConversionService.SqlTypeFamily;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,6 +19,19 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class MappingService {
+
+    private static final int PREFLIGHT_SAMPLE_ROWS = 50;
+    private static final int MAX_TYPE_WARNINGS_PER_COLUMN = 3;
+
+    private final ValueConversionService valueConversionService;
+
+    public MappingService() {
+        this(new ValueConversionService(new TypeInferenceService()));
+    }
+
+    public MappingService(ValueConversionService valueConversionService) {
+        this.valueConversionService = valueConversionService;
+    }
 
     public List<ColumnMapping> autoMap(ParsedCsv csv, List<DbColumnMeta> dbColumns) {
         List<DbColumnMeta> safeDbColumns = dbColumns == null ? List.of() : dbColumns;
@@ -186,8 +200,82 @@ public class MappingService {
             }
         }
 
+        // Type preflight: try converting sample CSV values to the target DB column type.
+        if (!"DELETE".equalsIgnoreCase(operation)) {
+            validateSampleConversions(csv, safeMappings, byNormalizedName, result);
+        }
+
         result.setValid(result.getErrors().isEmpty());
         return result;
+    }
+
+    private void validateSampleConversions(
+            ParsedCsv csv,
+            List<ColumnMapping> mappings,
+            Map<String, DbColumnMeta> byNormalizedName,
+            MappingValidationResult result
+    ) {
+        if (csv == null || csv.getRows() == null || csv.getRows().isEmpty()) {
+            return;
+        }
+        int sampleLimit = Math.min(PREFLIGHT_SAMPLE_ROWS, csv.getRows().size());
+        for (ColumnMapping mapping : mappings) {
+            if (mapping == null || mapping.isIgnored() || !StringUtils.hasText(mapping.getTargetColumn())) {
+                continue;
+            }
+            DbColumnMeta meta = byNormalizedName.get(normalizeDbKey(mapping.getTargetColumn()));
+            if (meta == null) {
+                continue;
+            }
+            SqlTypeFamily family = valueConversionService.familyFrom(meta.getTypeName(), meta.getJdbcType());
+            int csvIndex = mapping.getCsvIndex();
+            int warningsForColumn = 0;
+            int failures = 0;
+            String firstFailure = null;
+            for (int row = 0; row < sampleLimit; row++) {
+                List<String> values = csv.getRows().get(row);
+                String raw = csvIndex < values.size() ? values.get(csvIndex) : null;
+                if (!StringUtils.hasText(raw == null ? null : raw.trim())) {
+                    if (!meta.isNullable() && !hasDefault(meta.getDefaultValue())) {
+                        failures++;
+                        if (firstFailure == null) {
+                            firstFailure = "empty value not allowed for NOT NULL column";
+                        }
+                    }
+                    continue;
+                }
+                String error = valueConversionService.conversionError(raw, family);
+                if (error != null) {
+                    failures++;
+                    if (firstFailure == null) {
+                        firstFailure = error;
+                    }
+                    if (warningsForColumn < MAX_TYPE_WARNINGS_PER_COLUMN) {
+                        result.getWarnings().add(
+                                "Type preflight: CSV '" + mapping.getCsvColumn() + "' → "
+                                        + meta.getColumnName() + " (" + family + "), sample row "
+                                        + (row + 2) + ": " + error);
+                        warningsForColumn++;
+                    }
+                }
+            }
+            if (failures > 0 && firstFailure != null) {
+                // Soft by default: warnings only. Hard error if majority of samples fail.
+                if (failures * 2 >= sampleLimit) {
+                    result.getErrors().add(
+                            "Type conversion likely fails for '" + mapping.getCsvColumn() + "' → "
+                                    + meta.getColumnName() + " (" + family + "): " + firstFailure
+                                    + " (" + failures + "/" + sampleLimit + " sample values).");
+                }
+            }
+            if (StringUtils.hasText(mapping.getNote()) && mapping.getNote().contains("unmapped")) {
+                continue;
+            }
+            if (mapping.getNote() == null || mapping.getNote().isBlank()) {
+                mapping.setNote("Target type: " + family
+                        + (meta.getTypeName() == null ? "" : " (" + meta.getTypeName() + ")"));
+            }
+        }
     }
 
     private boolean hasDefault(String defaultValue) {

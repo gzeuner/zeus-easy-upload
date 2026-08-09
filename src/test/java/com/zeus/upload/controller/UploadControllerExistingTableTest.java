@@ -12,6 +12,7 @@ import com.zeus.upload.config.AppProperties;
 import com.zeus.upload.domain.ColumnMapping;
 import com.zeus.upload.domain.ColumnProposal;
 import com.zeus.upload.domain.DbColumnMeta;
+import com.zeus.upload.domain.MappingValidationResult;
 import com.zeus.upload.domain.ParsedCsv;
 import com.zeus.upload.flow.FlowConfigurationFactory;
 import com.zeus.upload.flow.FlowExecutionService;
@@ -68,9 +69,14 @@ class UploadControllerExistingTableTest {
         );
         List<ColumnMapping> mappings = List.of(mapping("first_name", 0, "FIRST_NAME"));
 
+        MappingValidationResult preflight = new MappingValidationResult();
+        preflight.setValid(true);
+
         when(csvParsingService.parse(any())).thenReturn(parsedCsv);
         when(metadataService.listColumns("BIB", "PERSON", null)).thenReturn(dbColumns);
         when(mappingService.autoMap(any(ParsedCsv.class), anyList())).thenReturn(mappings);
+        when(mappingService.validate(any(ParsedCsv.class), anyList(), anyList(), any(), anyList()))
+                .thenReturn(preflight);
         when(appProperties.getDefaultLibrary()).thenReturn("BIB");
         when(connectionProfileService.list()).thenReturn(List.of());
 

@@ -11,7 +11,8 @@ import org.junit.jupiter.api.Test;
 
 class MappingServiceTest {
 
-    private final MappingService service = new MappingService();
+    private final MappingService service = new MappingService(
+            new ValueConversionService(new TypeInferenceService()));
 
     @Test
     void shouldMatchNormalizedExactName() {
@@ -129,6 +130,25 @@ class MappingServiceTest {
 
         assertThat(result.isValid()).isFalse();
         assertThat(result.getErrors()).anyMatch(error -> error.contains("must be mapped"));
+    }
+
+    @Test
+    void shouldErrorWhenMostSampleValuesFailTypeConversion() {
+        ParsedCsv csv = new ParsedCsv();
+        csv.getOriginalHeaders().add("amount");
+        csv.getRows().add(List.of("not-a-number"));
+        csv.getRows().add(List.of("still-bad"));
+        csv.getRows().add(List.of("also-bad"));
+        List<DbColumnMeta> dbColumns = List.of(
+                new DbColumnMeta("AMOUNT", "INTEGER", java.sql.Types.INTEGER, 10, 10, 0, true, null, 1)
+        );
+        List<ColumnMapping> mappings = List.of(mapping(0, "amount", "AMOUNT", false));
+
+        MappingValidationResult result = service.validate(csv, dbColumns, mappings, "INSERT", List.of());
+
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(error -> error.contains("Type conversion likely fails"));
+        assertThat(result.getWarnings()).anyMatch(w -> w.contains("Type preflight"));
     }
 
     private ParsedCsv parsedCsvWithHeaders(String... headers) {
