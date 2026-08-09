@@ -8,8 +8,9 @@ import com.zeus.upload.domain.ImportRequest;
 import com.zeus.upload.domain.ImportResult;
 import com.zeus.upload.domain.ParseError;
 import com.zeus.upload.domain.ParsedCsv;
-import com.zeus.upload.sql.MergeSqlBuilder;
 import com.zeus.upload.sql.SqlDialect;
+import com.zeus.upload.sql.UpsertSql;
+import com.zeus.upload.util.ColumnNameSanitizer;
 import java.math.BigDecimal;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
@@ -31,6 +32,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -39,13 +41,15 @@ public class ImportService {
 
     private static final Logger log = LoggerFactory.getLogger(ImportService.class);
 
+    private final DbSessionFactory dbSessionFactory;
+    private final ColumnNameSanitizer columnNameSanitizer;
     private final DataSource dataSource;
     private final DdlService ddlService;
     private final TypeInferenceService typeInferenceService;
     private final AppProperties appProperties;
     private final SqlDialect sqlDialect;
-    private final MergeSqlBuilder mergeSqlBuilder;
 
+    /** Unit-test / simple construction without profile sessions. */
     public ImportService(
             DataSource dataSource,
             DdlService ddlService,
@@ -53,29 +57,50 @@ public class ImportService {
             AppProperties appProperties,
             SqlDialect sqlDialect
     ) {
+        this(null, new ColumnNameSanitizer(), dataSource, ddlService, typeInferenceService, appProperties, sqlDialect);
+    }
+
+    @Autowired
+    public ImportService(
+            DbSessionFactory dbSessionFactory,
+            ColumnNameSanitizer columnNameSanitizer,
+            DataSource dataSource,
+            DdlService ddlService,
+            TypeInferenceService typeInferenceService,
+            AppProperties appProperties,
+            SqlDialect sqlDialect
+    ) {
+        this.dbSessionFactory = dbSessionFactory;
+        this.columnNameSanitizer = columnNameSanitizer == null ? new ColumnNameSanitizer() : columnNameSanitizer;
         this.dataSource = dataSource;
         this.ddlService = ddlService;
         this.typeInferenceService = typeInferenceService;
         this.appProperties = appProperties;
         this.sqlDialect = sqlDialect;
-        this.mergeSqlBuilder = new MergeSqlBuilder(sqlDialect);
     }
 
     public ImportResult importCsv(ImportRequest request, ParsedCsv parsedCsv) {
-        return importCsv(request, parsedCsv, request.isDryRun());
+        try (DbSession session = openSession(request == null ? null : request.getConnectionProfileName())) {
+            return doImportCsv(session, request, parsedCsv, request != null && request.isDryRun());
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return ImportResult.failure(ex.getMessage(), "", List.of(new ParseError(0, "", "", ex.getMessage())));
+        }
     }
 
-    private ImportResult importCsv(ImportRequest request, ParsedCsv parsedCsv, boolean dryRun) {
+    private ImportResult doImportCsv(DbSession session, ImportRequest request, ParsedCsv parsedCsv, boolean dryRun) {
         List<ParseError> errors = new ArrayList<>();
-        String createSql = ddlService.createTableSql(request.getLibrary(), request.getTableName(), request.getColumns());
-        String insertSql = ddlService.insertSql(request.getLibrary(), request.getTableName(), request.getColumns());
+        DdlService ddl = ddlFor(session);
+        String createSql = ddl.createTableSql(request.getLibrary(), request.getTableName(), request.getColumns());
+        String insertSql = ddl.insertSql(request.getLibrary(), request.getTableName(), request.getColumns());
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
+
+            ensureSchemaExists(connection, session.dialect(), request.getLibrary());
 
             if (request.isDropAndRecreate()) {
                 try (PreparedStatement drop = connection.prepareStatement(
-                        ddlService.dropTableSql(request.getLibrary(), request.getTableName()))) {
+                        ddl.dropTableSql(request.getLibrary(), request.getTableName()))) {
                     drop.executeUpdate();
                 } catch (SQLException ex) {
                     log.info("DROP TABLE ignored: {}", ex.getMessage());
@@ -113,10 +138,38 @@ public class ImportService {
             List<DbColumnMeta> dbColumns,
             List<ColumnMapping> mappings
     ) {
-        return importIntoExistingTable(library, tableName, csv, dbColumns, mappings, false);
+        return importIntoExistingTable(null, library, tableName, csv, dbColumns, mappings, false);
     }
 
     public ImportResult importIntoExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            boolean dryRun
+    ) {
+        return importIntoExistingTable(null, library, tableName, csv, dbColumns, mappings, dryRun);
+    }
+
+    public ImportResult importIntoExistingTable(
+            String connectionProfileName,
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            boolean dryRun
+    ) {
+        try (DbSession session = openSession(connectionProfileName)) {
+            return doImportIntoExistingTable(session, library, tableName, csv, dbColumns, mappings, dryRun);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return ImportResult.failure(ex.getMessage(), "", List.of(new ParseError(0, "", "", ex.getMessage())));
+        }
+    }
+
+    private ImportResult doImportIntoExistingTable(
+            DbSession session,
             String library,
             String tableName,
             ParsedCsv csv,
@@ -149,9 +202,9 @@ public class ImportService {
             return ImportResult.failure("Import aborted due to invalid mappings.", "", errors);
         }
 
-        String insertSql = buildInsertSql(library, tableName, effectiveMappings);
+        String insertSql = buildInsertSql(session.dialect(), library, tableName, effectiveMappings);
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
             int insertedRows = executeExistingTableInserts(connection, insertSql, effectiveMappings, csv.getRows(), errors);
             if (!errors.isEmpty()) {
@@ -180,10 +233,40 @@ public class ImportService {
             List<ColumnMapping> mappings,
             List<String> keyColumns
     ) {
-        return upsertIntoExistingTable(library, tableName, csv, dbColumns, mappings, keyColumns, false);
+        return upsertIntoExistingTable(null, library, tableName, csv, dbColumns, mappings, keyColumns, false);
     }
 
     public ImportResult updateIntoExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        return updateIntoExistingTable(null, library, tableName, csv, dbColumns, mappings, keyColumns, dryRun);
+    }
+
+    public ImportResult updateIntoExistingTable(
+            String connectionProfileName,
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        try (DbSession session = openSession(connectionProfileName)) {
+            return doUpdateIntoExistingTable(session, library, tableName, csv, dbColumns, mappings, keyColumns, dryRun);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return ImportResult.failure(ex.getMessage(), "", List.of(new ParseError(0, "", "", ex.getMessage())));
+        }
+    }
+
+    private ImportResult doUpdateIntoExistingTable(
+            DbSession session,
             String library,
             String tableName,
             ParsedCsv csv,
@@ -209,8 +292,8 @@ public class ImportService {
                     List.of(new ParseError(0, "", "", "Map at least one non-key column for updates.")));
         }
 
-        sql = buildUpdateSql(library, tableName, updateMappings, keyMappings);
-        try (Connection connection = dataSource.getConnection()) {
+        sql = buildUpdateSql(session.dialect(), library, tableName, updateMappings, keyMappings);
+        try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
             int affectedRows = executeKeyedRows(connection, sql, updateMappings, keyMappings, csv.getRows(), errors);
             if (!errors.isEmpty()) {
@@ -240,6 +323,36 @@ public class ImportService {
             List<String> keyColumns,
             boolean dryRun
     ) {
+        return deleteFromExistingTable(null, library, tableName, csv, dbColumns, mappings, keyColumns, dryRun);
+    }
+
+    public ImportResult deleteFromExistingTable(
+            String connectionProfileName,
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        try (DbSession session = openSession(connectionProfileName)) {
+            return doDeleteFromExistingTable(session, library, tableName, csv, dbColumns, mappings, keyColumns, dryRun);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return ImportResult.failure(ex.getMessage(), "", List.of(new ParseError(0, "", "", ex.getMessage())));
+        }
+    }
+
+    private ImportResult doDeleteFromExistingTable(
+            DbSession session,
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
         List<ColumnMapping> effectiveMappings = determineEffectiveMappings(mappings);
         List<String> keys = normalizeSelectedKeys(keyColumns);
         String sql = "";
@@ -249,8 +362,8 @@ public class ImportService {
         }
 
         List<ColumnMapping> keyMappings = mappingsForKeys(effectiveMappings, keys);
-        sql = buildDeleteSql(library, tableName, keyMappings);
-        try (Connection connection = dataSource.getConnection()) {
+        sql = buildDeleteSql(session.dialect(), library, tableName, keyMappings);
+        try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
             int affectedRows = executeKeyedRows(connection, sql, keyMappings, List.of(), csv.getRows(), errors);
             if (!errors.isEmpty()) {
@@ -309,22 +422,27 @@ public class ImportService {
         return mappings.stream().filter(mapping -> containsNormalized(keys, mapping.getTargetColumn())).toList();
     }
 
-    private String buildUpdateSql(String library, String tableName, List<ColumnMapping> updates, List<ColumnMapping> keys) {
-        String assignments = updates.stream()
-                .map(mapping -> sqlDialect.quoteIdentifier(mapping.getTargetColumn()) + " = ?")
-                .collect(java.util.stream.Collectors.joining(", "));
-        return "UPDATE " + sqlDialect.qualifyTable(library, tableName) + " SET " + assignments
-                + " WHERE " + whereClause(keys);
+    private String buildUpdateSql(
+            SqlDialect dialect,
+            String library,
+            String tableName,
+            List<ColumnMapping> updates,
+            List<ColumnMapping> keys
+    ) {
+        return dialect.buildUpdateSql(
+                library,
+                tableName,
+                updates.stream().map(ColumnMapping::getTargetColumn).toList(),
+                keys.stream().map(ColumnMapping::getTargetColumn).toList()
+        );
     }
 
-    private String buildDeleteSql(String library, String tableName, List<ColumnMapping> keys) {
-        return "DELETE FROM " + sqlDialect.qualifyTable(library, tableName) + " WHERE " + whereClause(keys);
-    }
-
-    private String whereClause(List<ColumnMapping> keys) {
-        return keys.stream()
-                .map(mapping -> sqlDialect.quoteIdentifier(mapping.getTargetColumn()) + " = ?")
-                .collect(java.util.stream.Collectors.joining(" AND "));
+    private String buildDeleteSql(SqlDialect dialect, String library, String tableName, List<ColumnMapping> keys) {
+        return dialect.buildDeleteSql(
+                library,
+                tableName,
+                keys.stream().map(ColumnMapping::getTargetColumn).toList()
+        );
     }
 
     private int executeKeyedRows(
@@ -365,6 +483,36 @@ public class ImportService {
     }
 
     public ImportResult upsertIntoExistingTable(
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        return upsertIntoExistingTable(null, library, tableName, csv, dbColumns, mappings, keyColumns, dryRun);
+    }
+
+    public ImportResult upsertIntoExistingTable(
+            String connectionProfileName,
+            String library,
+            String tableName,
+            ParsedCsv csv,
+            List<DbColumnMeta> dbColumns,
+            List<ColumnMapping> mappings,
+            List<String> keyColumns,
+            boolean dryRun
+    ) {
+        try (DbSession session = openSession(connectionProfileName)) {
+            return doUpsertIntoExistingTable(session, library, tableName, csv, dbColumns, mappings, keyColumns, dryRun);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return ImportResult.failure(ex.getMessage(), "", List.of(new ParseError(0, "", "", ex.getMessage())));
+        }
+    }
+
+    private ImportResult doUpsertIntoExistingTable(
+            DbSession session,
             String library,
             String tableName,
             ParsedCsv csv,
@@ -433,15 +581,17 @@ public class ImportService {
             );
         }
 
-        String mergeSql;
+        String mergeSql = "";
         try {
-            mergeSql = mergeSqlBuilder.buildDb2MergeSql(library, tableName, insertColumns, updateColumns, effectiveKeys);
-        } catch (IllegalArgumentException ex) {
+            UpsertSql upsertSql = session.dialect().buildUpsertSql(
+                    library, tableName, insertColumns, updateColumns, effectiveKeys);
+            mergeSql = upsertSql.sql();
+        } catch (IllegalArgumentException | UnsupportedOperationException ex) {
             return ImportResult.failure("Import aborted due to invalid upsert configuration.", "",
                     List.of(new ParseError(0, "", "", ex.getMessage())));
         }
 
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
             int processedRows = executeMergeRows(connection, mergeSql, effectiveMappings, insertColumns, csv.getRows(), errors);
             if (!errors.isEmpty()) {
@@ -463,13 +613,28 @@ public class ImportService {
     }
 
     String buildInsertSql(String library, String tableName, List<ColumnMapping> mappings) {
+        return buildInsertSql(sqlDialect, library, tableName, mappings);
+    }
+
+    String buildInsertSql(SqlDialect dialect, String library, String tableName, List<ColumnMapping> mappings) {
         List<String> targetColumns = mappings.stream()
                 .map(ColumnMapping::getTargetColumn)
-                .map(sqlDialect::quoteIdentifier)
                 .toList();
-        String placeholders = String.join(", ", mappings.stream().map(m -> "?").toList());
-        return "INSERT INTO " + sqlDialect.qualifyTable(library, tableName)
-                + " (" + String.join(", ", targetColumns) + ") VALUES (" + placeholders + ")";
+        return dialect.buildInsertSql(library, tableName, targetColumns);
+    }
+
+    private DbSession openSession(String connectionProfileName) {
+        if (dbSessionFactory != null) {
+            return dbSessionFactory.open(connectionProfileName);
+        }
+        return new DbSession(dataSource, sqlDialect, null, sqlDialect.product(), null);
+    }
+
+    private DdlService ddlFor(DbSession session) {
+        if (session.isBootstrap() && ddlService != null && session.dialect() == sqlDialect) {
+            return ddlService;
+        }
+        return new DdlService(columnNameSanitizer, session.dialect());
     }
 
     private int executeInserts(
@@ -796,5 +961,23 @@ public class ImportService {
 
     private String normalizeColumnName(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * On H2 (local/test) create missing schemas so CREATE TABLE works without
+     * a pre-provisioned library. On IBM i this is a no-op.
+     */
+    private void ensureSchemaExists(Connection connection, SqlDialect dialect, String library) throws SQLException {
+        if (!dialect.supportsSchemaAutoCreate() || !StringUtils.hasText(library)) {
+            return;
+        }
+        String schemaSql = dialect.createSchemaSql(library);
+        if (!StringUtils.hasText(schemaSql)) {
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(schemaSql)) {
+            statement.executeUpdate();
+            log.debug("Ensured schema/library exists: {}", library);
+        }
     }
 }

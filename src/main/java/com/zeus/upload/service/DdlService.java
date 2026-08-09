@@ -23,16 +23,21 @@ public class DdlService {
     public String createTableSql(String library, String table, List<ColumnProposal> columns) {
         List<String> definitions = new ArrayList<>();
         Set<String> used = new HashSet<>();
+        int maxLength = sqlDialect.identifierPolicy().maxLength();
 
         for (ColumnProposal column : columns) {
             String finalName = columnNameSanitizer.uniquify(
-                    columnNameSanitizer.sanitizeBase(column.getFinalName()),
+                    columnNameSanitizer.sanitizeBase(column.getFinalName(), sqlDialect.identifierPolicy()),
                     used,
-                    ColumnNameSanitizer.MAX_COLUMN_LENGTH
+                    maxLength
             );
             column.setFinalName(finalName);
             definitions.add(sqlDialect.quoteIdentifier(finalName) + " "
-                    + resolveTypeDefinition(column)
+                    + sqlDialect.columnTypeDefinition(
+                            column.getSqlType(),
+                            column.getLength(),
+                            column.getPrecision(),
+                            column.getScale())
                     + (column.isNullable() ? "" : " NOT NULL"));
         }
 
@@ -46,32 +51,7 @@ public class DdlService {
     public String insertSql(String library, String table, List<ColumnProposal> columns) {
         List<String> names = columns.stream()
                 .map(ColumnProposal::getFinalName)
-                .map(sqlDialect::quoteIdentifier)
                 .toList();
-        String placeholders = String.join(", ", columns.stream().map(c -> "?").toList());
-        return "INSERT INTO " + sqlDialect.qualifyTable(library, table)
-                + " (" + String.join(", ", names) + ") VALUES (" + placeholders + ")";
-    }
-
-    private String resolveTypeDefinition(ColumnProposal column) {
-        String type = column.getSqlType().toUpperCase();
-        return switch (type) {
-            case "INTEGER" -> "INTEGER";
-            case "BIGINT" -> "BIGINT";
-            case "DATE" -> "DATE";
-            case "TIMESTAMP" -> "TIMESTAMP";
-            case "DECIMAL" -> {
-                int precision = column.getPrecision() == null ? 15 : Math.max(1, Math.min(31, column.getPrecision()));
-                int scale = column.getScale() == null ? 2 : Math.max(0, Math.min(31, column.getScale()));
-                if (scale >= precision) {
-                    scale = precision - 1;
-                }
-                yield "DECIMAL(" + precision + "," + scale + ")";
-            }
-            default -> {
-                int length = column.getLength() == null ? 255 : Math.max(1, Math.min(4000, column.getLength()));
-                yield "VARCHAR(" + length + ")";
-            }
-        };
+        return sqlDialect.buildInsertSql(library, table, names);
     }
 }

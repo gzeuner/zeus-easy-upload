@@ -1,8 +1,11 @@
 # IBM i Integration Tests and JDBC Setup
 
-The default test suite uses an in-memory H2 database and does not require an
-IBM i system. Tests that need a real IBM i connection must be run explicitly
-with the Maven `it` profile and the `it` Spring profile.
+The default test suite and the `local` Spring profile use H2 and do not require
+an IBM i system. See [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) for offline work.
+
+Tests that need a real IBM i connection must be run explicitly with the Maven
+`it` profile and the `it` Spring profile. **Never commit IBM i credentials**;
+pass them only via environment variables.
 
 ## Running against IBM i
 

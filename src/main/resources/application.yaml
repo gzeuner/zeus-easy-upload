@@ -1,9 +1,10 @@
 spring:
   datasource:
-    driver-class-name: com.ibm.as400.access.AS400JDBCDriver
-    url: jdbc:as400://system/bib;translate binary=true
-    username: user
-    password: pass
+    # Prefer environment variables / secret store. Never commit real IBM i credentials.
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:com.ibm.as400.access.AS400JDBCDriver}
+    url: ${SPRING_DATASOURCE_URL:jdbc:as400://localhost/}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
 
   servlet:
     multipart:
@@ -11,11 +12,11 @@ spring:
       max-request-size: 50MB
 
 app:
-  default-library: BIB
+  default-library: ${APP_DEFAULT_LIBRARY:BIB}
   sample-rows: 200
   batch-size: 500
   profile-directory: profiles
-  connection-profile-directory: connections
+  connection-profile-directory: ${APP_CONNECTION_PROFILE_DIRECTORY:connections}
   connection-master-key: ${ZEUS_CONNECTION_MASTER_KEY:}
 
 logging:

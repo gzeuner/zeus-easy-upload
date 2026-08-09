@@ -4,4 +4,16 @@
 *.log
 __pycache__/
 *.py[cod]
+
+# Local-only data, secrets, H2 files, connection profiles (never commit)
 /.local/
+.env
+.env.*
+!.env.example
+application-local-override.yaml
+application-local-override.yml
+*.h2.db
+*.mv.db
+*.trace.db
+connections/
+profiles/

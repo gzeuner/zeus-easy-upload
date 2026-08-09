@@ -6,6 +6,11 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.util.StringUtils;
 
+/**
+ * Builds IBM i / DB2-style MERGE … USING (VALUES …) statements.
+ * Prefer calling {@link SqlDialect#buildUpsertSql} from application code;
+ * this helper remains for {@link Db2iDialect} and unit tests.
+ */
 public class MergeSqlBuilder {
 
     private final SqlDialect sqlDialect;

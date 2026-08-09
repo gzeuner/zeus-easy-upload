@@ -38,6 +38,7 @@
     <form th:action="@{/import}" th:object="${importRequest}" method="post">
         <input type="hidden" th:field="*{useExistingTable}">
         <input type="hidden" th:field="*{existingTableName}">
+        <input type="hidden" th:field="*{connectionProfileName}">
         <input type="hidden" th:field="*{csvDelimiter}">
         <input type="hidden" th:field="*{csvEncoding}">
         <input type="hidden" th:field="*{csvQuote}">

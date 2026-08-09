@@ -23,17 +23,25 @@ public class MetadataController {
     }
 
     @GetMapping("/tables")
-    public List<DbTableRef> listTables(@RequestParam("library") String library) {
+    public List<DbTableRef> listTables(
+            @RequestParam("library") String library,
+            @RequestParam(value = "connectionProfileName", required = false) String connectionProfileName
+    ) {
         if (!StringUtils.hasText(library)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "library must not be blank");
         }
-        return metadataService.listTables(library);
+        try {
+            return metadataService.listTables(library, connectionProfileName);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
     }
 
     @GetMapping("/columns")
     public List<DbColumnMeta> listColumns(
             @RequestParam("library") String library,
-            @RequestParam("table") String table
+            @RequestParam("table") String table,
+            @RequestParam(value = "connectionProfileName", required = false) String connectionProfileName
     ) {
         if (!StringUtils.hasText(library)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "library must not be blank");
@@ -41,6 +49,10 @@ public class MetadataController {
         if (!StringUtils.hasText(table)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "table must not be blank");
         }
-        return metadataService.listColumns(library, table);
+        try {
+            return metadataService.listColumns(library, table, connectionProfileName);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
     }
 }

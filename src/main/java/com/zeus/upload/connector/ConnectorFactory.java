@@ -18,11 +18,14 @@ import com.zeus.upload.flow.RestSourceConfiguration;
 import com.zeus.upload.flow.RestTargetConfiguration;
 import com.zeus.upload.flow.SourceConfiguration;
 import com.zeus.upload.flow.TargetConfiguration;
+import com.zeus.upload.service.DbSession;
+import com.zeus.upload.service.DbSessionFactory;
 import com.zeus.upload.service.ImportService;
 import com.zeus.upload.sql.SqlDialect;
+import java.util.Objects;
 import javax.sql.DataSource;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ConnectorFactory {
@@ -30,16 +33,23 @@ public class ConnectorFactory {
     private final ImportService importService;
     private final DataSource dataSource;
     private final SqlDialect sqlDialect;
+    private final DbSessionFactory dbSessionFactory;
 
     public ConnectorFactory(ImportService importService) {
-        this(importService, null, null);
+        this(importService, null, null, null);
     }
 
     @Autowired
-    public ConnectorFactory(ImportService importService, DataSource dataSource, SqlDialect sqlDialect) {
+    public ConnectorFactory(
+            ImportService importService,
+            DataSource dataSource,
+            SqlDialect sqlDialect,
+            DbSessionFactory dbSessionFactory
+    ) {
         this.importService = importService;
         this.dataSource = dataSource;
         this.sqlDialect = sqlDialect;
+        this.dbSessionFactory = dbSessionFactory;
     }
 
     public SourceConnector createSource(SourceConfiguration configuration) {
@@ -47,7 +57,7 @@ public class ConnectorFactory {
             return new CsvSourceConnector(csvSourceConfiguration.getParsedCsv());
         }
         if (configuration instanceof DbTableSourceConfiguration dbSourceConfiguration) {
-            return new DbTableSourceConnector(dataSource, sqlDialect, dbSourceConfiguration);
+            return createDbTableSource(dbSourceConfiguration);
         }
         if (configuration instanceof FilesystemCsvSourceConfiguration filesystemConfiguration) {
             return new FilesystemCsvSourceConnector(filesystemConfiguration);
@@ -72,5 +82,24 @@ public class ConnectorFactory {
             return new RestJsonTargetConnector(restConfiguration);
         }
         throw new IllegalArgumentException("Unsupported target configuration: " + configuration.getClass().getName());
+    }
+
+    private SourceConnector createDbTableSource(DbTableSourceConfiguration configuration) {
+        if (dbSessionFactory != null) {
+            return () -> {
+                DbSession session = dbSessionFactory.open(configuration.getConnectionProfileName());
+                try {
+                    return new DbTableSourceConnector(session.dataSource(), session.dialect(), configuration)
+                            .read()
+                            .onClose(session::close);
+                } catch (RuntimeException ex) {
+                    session.close();
+                    throw ex;
+                }
+            };
+        }
+        Objects.requireNonNull(dataSource, "dataSource");
+        Objects.requireNonNull(sqlDialect, "sqlDialect");
+        return new DbTableSourceConnector(dataSource, sqlDialect, configuration);
     }
 }

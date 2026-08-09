@@ -52,3 +52,35 @@ objects. Future connector factories can resolve a profile through
 `ConnectionProfileService.loadCredentials(name)` at execution time, inject
 the values into the existing REST/DB connector settings, and keep them out of
 import profiles, job payloads, logs and API responses.
+
+### Database product mapping (dialect registry)
+
+`ConnectionType.DB2_400` maps to `DatabaseProduct.DB2_I` via
+`SqlDialectRegistry.resolveFromConnectionType`. JDBC endpoints can also be
+classified with `SqlDialectRegistry.detectProduct(jdbcUrl)`
+(`jdbc:as400:` → DB2_I, `jdbc:h2:` → H2, `jdbc:postgresql:` → POSTGRES).
+
+### Per-connection DataSource (runtime)
+
+Import, metadata and DB source connectors accept an optional
+`connectionProfileName`:
+
+| Path | Parameter |
+|------|-----------|
+| UI upload form | `connectionProfileName` select |
+| `POST /api/jobs/import` | form field `connectionProfileName` |
+| `GET /meta/tables` | query `connectionProfileName` |
+| `GET /meta/columns` | query `connectionProfileName` |
+| `ImportRequest` / flow config | field `connectionProfileName` |
+
+Resolution flow:
+
+1. Blank name → Spring bootstrap `DataSource` + default `SqlDialect`
+2. Named profile → decrypt credentials → `ConnectionDataSourceFactory`
+   → `DriverManagerDataSource` → dialect from JDBC URL (fallback connection type)
+3. REST profiles are rejected for JDBC operations
+
+Credential keys accepted: `username`/`user`, `password`/`secret`. Secrets are
+never logged, never returned by the API and never stored on `ImportRequest`.
+
+See also [sql-dialects.md](sql-dialects.md).

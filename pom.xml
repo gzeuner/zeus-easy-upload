@@ -70,10 +70,11 @@
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Runtime scope: used by spring.profiles.active=local and tests; unused against IBM i. -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
     </dependencies>
 
@@ -94,6 +95,13 @@
     </build>
 
     <profiles>
+        <!-- Local development against embedded H2 (no IBM i required). -->
+        <profile>
+            <id>local</id>
+            <properties>
+                <spring-boot.run.profiles>local</spring-boot.run.profiles>
+            </properties>
+        </profile>
         <profile>
             <id>it</id>
             <properties>

@@ -15,6 +15,7 @@ public class FlowConfigurationFactory {
                 resolveWriteMode(importRequest),
                 importRequest.isDropAndRecreate(),
                 importRequest.isDryRun(),
+                importRequest.getConnectionProfileName(),
                 importRequest.getColumns(),
                 importRequest.getMappings(),
                 importRequest.getKeyColumns(),

@@ -1,5 +1,10 @@
 package com.zeus.upload.util;
 
+/**
+ * @deprecated Prefer {@link com.zeus.upload.sql.SqlDialect#normalizeIdentifier(String)}
+ * and {@link com.zeus.upload.sql.IdentifierPolicy} for dialect-aware rules.
+ */
+@Deprecated(forRemoval = false)
 public final class Db2IdentifierUtil {
 
     private Db2IdentifierUtil() {

@@ -15,6 +15,7 @@ import com.zeus.upload.domain.DbColumnMeta;
 import com.zeus.upload.domain.ParsedCsv;
 import com.zeus.upload.flow.FlowConfigurationFactory;
 import com.zeus.upload.flow.FlowExecutionService;
+import com.zeus.upload.service.ConnectionProfileService;
 import com.zeus.upload.service.CsvParsingService;
 import com.zeus.upload.service.MappingService;
 import com.zeus.upload.service.MetadataService;
@@ -50,6 +51,9 @@ class UploadControllerExistingTableTest {
     @MockBean
     private FlowExecutionService flowExecutionService;
 
+    @MockBean
+    private ConnectionProfileService connectionProfileService;
+
     @Test
     void uploadShouldRenderPreviewWithMappingsForExistingTableMode() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
@@ -65,9 +69,10 @@ class UploadControllerExistingTableTest {
         List<ColumnMapping> mappings = List.of(mapping("first_name", 0, "FIRST_NAME"));
 
         when(csvParsingService.parse(any())).thenReturn(parsedCsv);
-        when(metadataService.listColumns("BIB", "PERSON")).thenReturn(dbColumns);
+        when(metadataService.listColumns("BIB", "PERSON", null)).thenReturn(dbColumns);
         when(mappingService.autoMap(any(ParsedCsv.class), anyList())).thenReturn(mappings);
         when(appProperties.getDefaultLibrary()).thenReturn("BIB");
+        when(connectionProfileService.list()).thenReturn(List.of());
 
         mockMvc.perform(multipart("/upload")
                         .file(file)
