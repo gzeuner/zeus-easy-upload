@@ -158,25 +158,43 @@ public class TypeInferenceService {
         return values.stream().allMatch(value -> parseTimestamp(value) != null);
     }
 
+    /**
+     * Derive DECIMAL(p,s) so that every sample value fits.
+     * Uses max integer digits + max fractional digits across samples.
+     * Note: {@link BigDecimal#stripTrailingZeros()} is intentionally not used —
+     * it turns {@code 1500.00} into {@code 1.5E+3} and underestimates precision.
+     */
     private int[] calculatePrecisionScale(List<String> values) {
-        int precision = 1;
-        int scale = 0;
+        int maxIntegerDigits = 1;
+        int maxScale = 0;
         for (String value : values) {
-            BigDecimal decimal = new BigDecimal(value.replace(',', '.').trim());
-            decimal = decimal.stripTrailingZeros();
-            int valuePrecision = decimal.precision();
-            int valueScale = Math.max(decimal.scale(), 0);
-            precision = Math.max(precision, valuePrecision);
-            scale = Math.max(scale, valueScale);
-        }
-        precision = Math.max(precision, scale + 1);
-        if (precision > 31) {
-            precision = 31;
-            if (scale >= precision) {
-                scale = precision - 1;
+            BigDecimal decimal = new BigDecimal(value.replace(',', '.').trim()).abs();
+            int scale = decimal.scale();
+            int precision = decimal.precision();
+            int integerDigits;
+            if (scale < 0) {
+                // e.g. 1.5E+3 → scale -2: all digits are before the decimal point
+                integerDigits = precision - scale;
+                scale = 0;
+            } else {
+                integerDigits = precision - scale;
+                if (integerDigits < 1) {
+                    integerDigits = 1;
+                }
             }
+            maxIntegerDigits = Math.max(maxIntegerDigits, integerDigits);
+            maxScale = Math.max(maxScale, scale);
         }
-        return new int[]{precision, scale};
+        int precision = maxIntegerDigits + maxScale;
+        // small headroom so slightly larger values still fit
+        precision = Math.min(31, precision + 1);
+        if (precision < maxScale + 1) {
+            precision = maxScale + 1;
+        }
+        if (maxScale >= precision) {
+            maxScale = precision - 1;
+        }
+        return new int[]{precision, maxScale};
     }
 
     private int calculateVarcharLength(int maxLength) {
