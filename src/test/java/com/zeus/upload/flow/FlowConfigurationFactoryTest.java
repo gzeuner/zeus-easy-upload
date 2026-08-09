@@ -51,9 +51,9 @@ class FlowConfigurationFactoryTest {
         DbTableTargetConfiguration target = (DbTableTargetConfiguration) configuration.getTarget();
         assertThat(target.getTableName()).isEqualTo("PERSON");
         assertThat(target.getWriteMode()).isEqualTo(DbTableWriteMode.UPSERT_EXISTING);
-        assertThat(target.getMappings()).hasSize(1);
+        assertThat(target.getMappings()).hasSize(2);
         assertThat(target.getKeyColumns()).containsExactly("ID");
-        assertThat(target.getDbColumns()).hasSize(1);
+        assertThat(target.getDbColumns()).hasSize(2);
     }
 
     @Test
