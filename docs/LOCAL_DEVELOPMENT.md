@@ -72,10 +72,12 @@ IBM i live tests remain opt-in; see [IBM_I_INTEGRATION.md](IBM_I_INTEGRATION.md)
 
 ## Browser E2E (Playwright)
 
-Full UI flows (CSV upload → preview → create/existing import → result, connections
-page including **Verbindung testen** for JDBC H2 and REST self-check) run with
-[Playwright for Java](https://playwright.dev/java/) against an embedded Spring Boot
-server (profile `test` / in-memory H2).
+Full UI flows run with [Playwright for Java](https://playwright.dev/java/) against an
+embedded Spring Boot server (profile `test` / in-memory H2):
+
+- CSV create table + insert, drop/recreate, existing-table insert
+- Existing-table **UPDATE** / **DELETE** (key columns, typed conversion)
+- Connections page including **Verbindung testen** (JDBC H2 + REST self-check)
 
 **Why Playwright?** The app is multipage Thymeleaf with file upload, radios,
 checkboxes, and client-side table loading — real browser coverage catches

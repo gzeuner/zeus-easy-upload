@@ -20,9 +20,13 @@
                         <p class="mb-0" th:text="${result.message}"></p>
                     </div>
 
-                    <p><strong>Inserted Rows:</strong> <span th:text="${result.insertedRows}"></span></p>
-                    <p><strong>DDL:</strong></p>
-                    <pre class="bg-body-secondary p-3 rounded" th:text="${result.createTableSql}"></pre>
+                    <p>
+                        <strong>Rows affected:</strong>
+                        <span id="rowsAffected" th:text="${result.insertedRows}"></span>
+                        <span class="text-muted small ms-1">(insert / update / delete)</span>
+                    </p>
+                    <p><strong>SQL:</strong></p>
+                    <pre id="resultSql" class="bg-body-secondary p-3 rounded" th:text="${result.createTableSql}"></pre>
 
                     <div th:if="${result.errors != null and !result.errors.isEmpty()}">
                         <h5>Errors</h5>

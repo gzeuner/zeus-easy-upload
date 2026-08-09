@@ -314,9 +314,11 @@ public class ImportService {
         }
 
         sql = buildUpdateSql(session.dialect(), library, tableName, updateMappings, keyMappings);
+        Map<String, DbColumnMeta> columnsByName = dbColumnMetaByName(dbColumns);
         try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
-            int affectedRows = executeKeyedRows(connection, sql, updateMappings, keyMappings, csv.getRows(), errors);
+            int affectedRows = executeKeyedRows(
+                    connection, sql, updateMappings, keyMappings, columnsByName, csv.getRows(), errors);
             if (!errors.isEmpty()) {
                 connection.rollback();
                 throw new ImportException("Import aborted due to update errors", errors);
@@ -384,9 +386,12 @@ public class ImportService {
 
         List<ColumnMapping> keyMappings = mappingsForKeys(effectiveMappings, keys);
         sql = buildDeleteSql(session.dialect(), library, tableName, keyMappings);
+        Map<String, DbColumnMeta> columnsByName = dbColumnMetaByName(dbColumns);
         try (Connection connection = session.dataSource().getConnection()) {
             connection.setAutoCommit(false);
-            int affectedRows = executeKeyedRows(connection, sql, keyMappings, List.of(), csv.getRows(), errors);
+            // DELETE SQL only has key predicates; bind keys as "values" with no trailing WHERE params.
+            int affectedRows = executeKeyedRows(
+                    connection, sql, keyMappings, List.of(), columnsByName, csv.getRows(), errors);
             if (!errors.isEmpty()) {
                 connection.rollback();
                 throw new ImportException("Import aborted due to delete errors", errors);
@@ -471,6 +476,7 @@ public class ImportService {
             String sql,
             List<ColumnMapping> valueMappings,
             List<ColumnMapping> keyMappings,
+            Map<String, DbColumnMeta> columnsByName,
             List<List<String>> rows,
             List<ParseError> errors
     ) throws SQLException {
@@ -479,8 +485,9 @@ public class ImportService {
             for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
                 try {
                     statement.clearParameters();
-                    bindMappings(statement, valueMappings, rows.get(rowIndex), 1);
-                    bindMappings(statement, keyMappings, rows.get(rowIndex), valueMappings.size() + 1);
+                    bindTypedMappings(statement, valueMappings, columnsByName, rows.get(rowIndex), 1);
+                    bindTypedMappings(
+                            statement, keyMappings, columnsByName, rows.get(rowIndex), valueMappings.size() + 1);
                     affectedRows += statement.executeUpdate();
                 } catch (Exception ex) {
                     errors.add(new ParseError(rowIndex + 2L, "", "", ex.getMessage()));
@@ -490,15 +497,43 @@ public class ImportService {
         return affectedRows;
     }
 
-    private void bindMappings(PreparedStatement statement, List<ColumnMapping> mappings, List<String> row, int startIndex)
-            throws SQLException {
+    /**
+     * Binds CSV cells to JDBC parameters using the same typed conversion as existing-table INSERT.
+     * Parameter indices are 1-based; {@code startIndex} is the first index for this mapping group
+     * (SET columns first, then WHERE keys for UPDATE).
+     */
+    private void bindTypedMappings(
+            PreparedStatement statement,
+            List<ColumnMapping> mappings,
+            Map<String, DbColumnMeta> columnsByName,
+            List<String> row,
+            int startIndex
+    ) throws SQLException {
+        if (mappings == null || mappings.isEmpty()) {
+            return;
+        }
         for (int index = 0; index < mappings.size(); index++) {
-            int csvIndex = mappings.get(index).getCsvIndex();
+            ColumnMapping mapping = mappings.get(index);
+            int csvIndex = mapping.getCsvIndex();
             String value = csvIndex < row.size() ? row.get(csvIndex) : null;
-            if (!StringUtils.hasText(value)) {
-                statement.setNull(startIndex + index, Types.VARCHAR);
+            DbColumnMeta meta = columnsByName == null
+                    ? null
+                    : columnsByName.get(normalizeColumnName(mapping.getTargetColumn()));
+            ValueConversionService.SqlTypeFamily family = valueConversionService == null
+                    ? ValueConversionService.SqlTypeFamily.VARCHAR
+                    : valueConversionService.familyFrom(
+                            meta == null ? null : meta.getTypeName(),
+                            meta == null ? null : meta.getJdbcType());
+            int parameterIndex = startIndex + index;
+            if (valueConversionService != null) {
+                valueConversionService.bind(statement, parameterIndex, value, family);
             } else {
-                statement.setString(startIndex + index, value.trim());
+                String trimmed = value == null ? null : value.trim();
+                if (!StringUtils.hasText(trimmed)) {
+                    statement.setNull(parameterIndex, Types.VARCHAR);
+                } else {
+                    statement.setString(parameterIndex, trimmed);
+                }
             }
         }
     }

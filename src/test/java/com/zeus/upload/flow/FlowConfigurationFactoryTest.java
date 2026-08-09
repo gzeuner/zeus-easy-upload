@@ -43,31 +43,57 @@ class FlowConfigurationFactoryTest {
 
     @Test
     void shouldCreateExistingTableUpsertFlowConfiguration() {
+        ImportRequest request = existingRequest("UPSERT");
+        request.setUpsertEnabled(true);
+
+        FlowConfiguration configuration = factory.fromImportContext(request, existingPreview());
+
+        DbTableTargetConfiguration target = (DbTableTargetConfiguration) configuration.getTarget();
+        assertThat(target.getTableName()).isEqualTo("PERSON");
+        assertThat(target.getWriteMode()).isEqualTo(DbTableWriteMode.UPSERT_EXISTING);
+        assertThat(target.getMappings()).hasSize(2);
+        assertThat(target.getKeyColumns()).containsExactly("ID");
+        assertThat(target.getDbColumns()).hasSize(2);
+    }
+
+    @Test
+    void shouldCreateExistingTableUpdateFlowConfiguration() {
+        FlowConfiguration configuration = factory.fromImportContext(existingRequest("UPDATE"), existingPreview());
+        DbTableTargetConfiguration target = (DbTableTargetConfiguration) configuration.getTarget();
+        assertThat(target.getWriteMode()).isEqualTo(DbTableWriteMode.UPDATE_EXISTING);
+        assertThat(target.getKeyColumns()).containsExactly("ID");
+    }
+
+    @Test
+    void shouldCreateExistingTableDeleteFlowConfiguration() {
+        FlowConfiguration configuration = factory.fromImportContext(existingRequest("DELETE"), existingPreview());
+        DbTableTargetConfiguration target = (DbTableTargetConfiguration) configuration.getTarget();
+        assertThat(target.getWriteMode()).isEqualTo(DbTableWriteMode.DELETE_EXISTING);
+        assertThat(target.getKeyColumns()).containsExactly("ID");
+    }
+
+    private ImportRequest existingRequest(String operation) {
         ImportRequest request = new ImportRequest();
         request.setLibrary("TESTLIB");
         request.setTableName("TMP_TABLE");
         request.setUseExistingTable(true);
         request.setExistingTableName("PERSON");
-        request.setUpsertEnabled(true);
-        request.setMappings(List.of(mapping("id", 0, "ID")));
+        request.setOperation(operation);
+        request.setMappings(List.of(mapping("id", 0, "ID"), mapping("name", 1, "NAME")));
         request.setKeyColumns(List.of("ID"));
+        return request;
+    }
 
+    private PreviewContext existingPreview() {
         PreviewContext previewContext = new PreviewContext();
         ParsedCsv parsedCsv = new ParsedCsv();
-        parsedCsv.getOriginalHeaders().add("id");
+        parsedCsv.getOriginalHeaders().addAll(List.of("id", "name"));
         previewContext.setParsedCsv(parsedCsv);
         previewContext.setDbColumns(List.of(
-                new DbColumnMeta("ID", "INTEGER", java.sql.Types.INTEGER, 10, 10, 0, false, null, 1)
+                new DbColumnMeta("ID", "INTEGER", java.sql.Types.INTEGER, 10, 10, 0, false, null, 1),
+                new DbColumnMeta("NAME", "VARCHAR", java.sql.Types.VARCHAR, 64, 64, 0, true, null, 2)
         ));
-
-        FlowConfiguration configuration = factory.fromImportContext(request, previewContext);
-
-        DbTableTargetConfiguration target = (DbTableTargetConfiguration) configuration.getTarget();
-        assertThat(target.getTableName()).isEqualTo("PERSON");
-        assertThat(target.getWriteMode()).isEqualTo(DbTableWriteMode.UPSERT_EXISTING);
-        assertThat(target.getMappings()).hasSize(1);
-        assertThat(target.getKeyColumns()).containsExactly("ID");
-        assertThat(target.getDbColumns()).hasSize(1);
+        return previewContext;
     }
 
     private ColumnProposal column(String finalName) {
