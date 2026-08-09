@@ -45,7 +45,14 @@ public class DdlService {
     }
 
     public String dropTableSql(String library, String table) {
-        return "DROP TABLE " + sqlDialect.qualifyTable(library, table);
+        return sqlDialect.dropTableSql(library, table);
+    }
+
+    public String dropTableIfExistsSql(String library, String table) {
+        if (sqlDialect.supportsDropIfExists()) {
+            return sqlDialect.dropTableIfExistsSql(library, table);
+        }
+        return sqlDialect.dropTableSql(library, table);
     }
 
     public String insertSql(String library, String table, List<ColumnProposal> columns) {

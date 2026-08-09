@@ -23,6 +23,11 @@ public class H2Dialect extends AbstractSqlDialect {
     }
 
     @Override
+    public boolean supportsDropIfExists() {
+        return true;
+    }
+
+    @Override
     public UpsertStrategy upsertStrategy() {
         return UpsertStrategy.UNSUPPORTED;
     }
