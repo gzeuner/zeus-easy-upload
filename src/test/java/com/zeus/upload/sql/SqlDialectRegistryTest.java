@@ -29,6 +29,7 @@ class SqlDialectRegistryTest {
         assertThat(registry.resolveFromJdbcUrl("jdbc:h2:file:./.local/h2/zeus").product()).isEqualTo(DatabaseProduct.H2);
         assertThat(registry.resolveFromJdbcUrl("jdbc:postgresql://x/y").product()).isEqualTo(DatabaseProduct.POSTGRES);
         assertThat(registry.resolveFromConnectionType(ConnectionType.DB2_400).product()).isEqualTo(DatabaseProduct.DB2_I);
+        assertThat(registry.resolveFromConnectionType(ConnectionType.POSTGRES).product()).isEqualTo(DatabaseProduct.POSTGRES);
         assertThat(registry.resolveFromConnectionType(ConnectionType.REST).product()).isEqualTo(DatabaseProduct.GENERIC_JDBC);
     }
 }

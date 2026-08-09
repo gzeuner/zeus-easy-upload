@@ -53,13 +53,16 @@
                             <div class="col-md-6">
                                 <label for="connectionType" class="form-label">Typ</label>
                                 <select id="connectionType" class="form-select" required>
-                                    <option value="DB2_400">IBM i DB2/400</option>
+                                    <option value="DB2_400">IBM i DB2/400 (JDBC)</option>
+                                    <option value="POSTGRES">PostgreSQL (JDBC)</option>
                                     <option value="REST">REST API</option>
                                 </select>
                             </div>
                             <div class="col-12">
                                 <label for="connectionEndpoint" class="form-label">Verbindungs-URL</label>
-                                <input id="connectionEndpoint" class="form-control" placeholder="jdbc:as400://system/bib oder https://api.example.com" required>
+                                <input id="connectionEndpoint" class="form-control"
+                                       placeholder="jdbc:as400://host/LIB · jdbc:postgresql://host:5432/db · https://api.example.com"
+                                       required>
                             </div>
                             <div class="col-12">
                                 <label for="connectionDescription" class="form-label">Beschreibung</label>

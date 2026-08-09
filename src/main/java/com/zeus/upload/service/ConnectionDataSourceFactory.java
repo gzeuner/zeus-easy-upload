@@ -75,9 +75,9 @@ public class ConnectionDataSourceFactory {
 
     private ResolvedJdbc resolve(ConnectionProfile profile, Map<String, String> credentials) {
         Objects.requireNonNull(profile, "profile");
-        if (profile.getType() == ConnectionType.REST) {
+        if (profile.getType() == null || !profile.getType().isJdbc()) {
             throw new IllegalArgumentException(
-                    "Connection profile '" + profile.getName() + "' is REST and cannot be used as a JDBC DataSource.");
+                    "Connection profile '" + profile.getName() + "' is not a JDBC profile and cannot be used as a DataSource.");
         }
         String url = profile.getEndpoint() == null ? "" : profile.getEndpoint().trim();
         if (!StringUtils.hasText(url) || !url.toLowerCase(Locale.ROOT).startsWith("jdbc:")) {

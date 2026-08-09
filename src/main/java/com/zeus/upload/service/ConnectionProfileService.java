@@ -157,6 +157,15 @@ public class ConnectionProfileService {
                     && !("http".equalsIgnoreCase(endpoint.getScheme()) || "https".equalsIgnoreCase(endpoint.getScheme()))) {
                 throw new IllegalArgumentException("REST connections require an HTTP(S) endpoint");
             }
+            if (request.getType() != null && request.getType().isJdbc()
+                    && !endpointValue.toLowerCase().startsWith("jdbc:")) {
+                throw new IllegalArgumentException("JDBC connections require a jdbc: endpoint URL");
+            }
+            if (request.getType() == com.zeus.upload.domain.ConnectionType.POSTGRES
+                    && !(endpointValue.toLowerCase().startsWith("jdbc:postgresql:")
+                    || endpointValue.toLowerCase().startsWith("jdbc:pgsql:"))) {
+                throw new IllegalArgumentException("POSTGRES connections require a jdbc:postgresql: endpoint URL");
+            }
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("Connection endpoint is invalid", ex);
         }

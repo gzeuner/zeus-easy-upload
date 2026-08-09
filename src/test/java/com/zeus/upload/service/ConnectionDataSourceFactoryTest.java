@@ -31,7 +31,7 @@ class ConnectionDataSourceFactoryTest {
                 "api", ConnectionType.REST, "https://example.com", null, true, null);
         assertThatThrownBy(() -> factory.create(profile, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("REST");
+                .hasMessageContaining("not a JDBC profile");
     }
 
     @Test

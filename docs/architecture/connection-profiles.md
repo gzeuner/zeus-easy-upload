@@ -1,8 +1,9 @@
 # Connection Profiles and GUI Configuration
 
 The GUI now provides `/connections` for managing provider-neutral connection
-profiles. A profile currently contains a safe name, type (`DB2_400` or `REST`),
-endpoint URL, description and optional credentials.
+profiles. A profile currently contains a safe name, type
+(`DB2_400`, `POSTGRES`, or `REST`), endpoint URL, description and optional
+credentials.
 
 ## Secret handling
 
@@ -33,7 +34,7 @@ must be backed up and rotated through an explicit migration process.
 - `GET /api/connections/{name}` — load metadata without secrets
 - `POST /api/connections` — validate and save a profile
 - `DELETE /api/connections/{name}` — delete a profile
-- `POST /api/connections/{name}/test` — JDBC connectivity test (no secrets in response)
+- `POST /api/connections/{name}/test` — connectivity test for JDBC **or REST** (no secrets in response)
 
 An empty credential field in the GUI preserves an existing encrypted secret.
 Endpoint URLs must not contain embedded credentials or URI fragments. JDBC
@@ -56,10 +57,17 @@ import profiles, job payloads, logs and API responses.
 
 ### Database product mapping (dialect registry)
 
-`ConnectionType.DB2_400` maps to `DatabaseProduct.DB2_I` via
-`SqlDialectRegistry.resolveFromConnectionType`. JDBC endpoints can also be
-classified with `SqlDialectRegistry.detectProduct(jdbcUrl)`
+`ConnectionType` → product mapping via `SqlDialectRegistry.resolveFromConnectionType`:
+
+| Type | Product |
+|------|---------|
+| `DB2_400` | `DB2_I` |
+| `POSTGRES` | `POSTGRES` |
+| `REST` | n/a (not JDBC) |
+
+JDBC URLs are also classified with `detectProduct`
 (`jdbc:as400:` → DB2_I, `jdbc:h2:` → H2, `jdbc:postgresql:` → POSTGRES).
+The PostgreSQL JDBC driver is on the runtime classpath for named Postgres profiles.
 
 ### Per-connection DataSource (runtime)
 
@@ -80,7 +88,16 @@ Resolution flow:
 2. Named profile → decrypt credentials → `ConnectionPoolCache.getOrCreate`
    → small **Hikari** pool (max 5) keyed by profile fingerprint
    → dialect from JDBC URL (fallback connection type)
-3. REST profiles are rejected for JDBC operations
+3. REST profiles are rejected for JDBC import sessions (use the REST test instead)
+
+### REST connection test
+
+`POST /api/connections/{name}/test` for type `REST`:
+
+- HTTP GET with 10s timeout, redirects disabled
+- Auth: Basic when `username`+`secret` are set; Bearer when only `secret`/`token` is set
+- Success: HTTP 2xx/3xx; 401/403 reported as reachable but auth failed
+- Endpoint must be http(s) without embedded credentials
 
 ### Pool cache
 
