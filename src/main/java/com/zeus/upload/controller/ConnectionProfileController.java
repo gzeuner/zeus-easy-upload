@@ -2,8 +2,10 @@ package com.zeus.upload.controller;
 
 import com.zeus.upload.domain.ConnectionProfile;
 import com.zeus.upload.domain.ConnectionProfileRequest;
+import com.zeus.upload.domain.ConnectionTestResult;
 import com.zeus.upload.service.ConnectionCryptoService;
 import com.zeus.upload.service.ConnectionProfileService;
+import com.zeus.upload.service.ConnectionTestService;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.util.List;
@@ -24,10 +26,16 @@ public class ConnectionProfileController {
 
     private final ConnectionProfileService profileService;
     private final ConnectionCryptoService cryptoService;
+    private final ConnectionTestService connectionTestService;
 
-    public ConnectionProfileController(ConnectionProfileService profileService, ConnectionCryptoService cryptoService) {
+    public ConnectionProfileController(
+            ConnectionProfileService profileService,
+            ConnectionCryptoService cryptoService,
+            ConnectionTestService connectionTestService
+    ) {
         this.profileService = profileService;
         this.cryptoService = cryptoService;
+        this.connectionTestService = connectionTestService;
     }
 
     @GetMapping
@@ -61,5 +69,17 @@ public class ConnectionProfileController {
     public ResponseEntity<Void> delete(@PathVariable String name) throws IOException {
         profileService.delete(name);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Connectivity check for a saved profile. Secrets are never returned.
+     */
+    @PostMapping("/{name}/test")
+    public ConnectionTestResult test(@PathVariable String name) {
+        ConnectionTestResult result = connectionTestService.test(name);
+        if (!result.isSuccess() && "Connection profile not found.".equals(result.getMessage())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, result.getMessage());
+        }
+        return result;
     }
 }
