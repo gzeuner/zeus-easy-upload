@@ -77,8 +77,8 @@
                 })
             });
             if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || `Speichern fehlgeschlagen (${response.status})`);
-            showStatus('Verbindung verschlüsselt gespeichert.', 'success');
             await loadProfiles();
+            showStatus('Verbindung verschlüsselt gespeichert.', 'success');
         } catch (error) { showStatus(error.message, 'danger'); }
     });
 
@@ -89,6 +89,9 @@
                 showStatus('Bitte zuerst ein gespeichertes Profil laden oder den Namen angeben.', 'warning');
                 return;
             }
+            const previousLabel = testButton.textContent;
+            testButton.disabled = true;
+            testButton.textContent = 'Teste …';
             showStatus('Verbindung wird getestet …', 'info');
             try {
                 const response = await fetch(`/api/connections/${encodeURIComponent(name)}/test`, { method: 'POST' });
@@ -108,6 +111,9 @@
                 }
             } catch (error) {
                 showStatus(error.message, 'danger');
+            } finally {
+                testButton.disabled = false;
+                testButton.textContent = previousLabel || 'Verbindung testen';
             }
         });
     }

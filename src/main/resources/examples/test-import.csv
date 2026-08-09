@@ -1,0 +1,6 @@
+id;customer_name;amount;quantity;active;booking_date;created_at;note
+1;Alice Meyer;123.45;10;1;2025-01-20;2025-01-20 10:15:30;First order
+2;Bob Schmidt;99,90;3;1;21.01.2025;2025-01-21T11:22:33;Comma decimal
+3;Charlie Weber;;0;0;22/01/2025;2025-01-22 08:00:00;
+4;Dana Braun;1500.00;25;1;2025-02-01;2025-02-01 09:30:00;Bulk order
+5;Eva Klein;-12.50;1;1;05.02.2025;2025-02-05T14:00:00;Credit note

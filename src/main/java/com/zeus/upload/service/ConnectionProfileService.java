@@ -7,6 +7,7 @@ import com.zeus.upload.domain.ConnectionProfileRequest;
 import com.zeus.upload.domain.EncryptedConnectionSecrets;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
@@ -130,6 +131,11 @@ public class ConnectionProfileService {
     }
 
     private StoredConnectionProfile readStored(Path path) throws IOException {
+        if (!Files.isRegularFile(path)) {
+            // Prefer NoSuchFileException so API/test layers can map to HTTP 404 cleanly
+            // (ObjectMapper would throw FileNotFoundException instead).
+            throw new NoSuchFileException(path.toString());
+        }
         return objectMapper.readValue(path.toFile(), StoredConnectionProfile.class);
     }
 
