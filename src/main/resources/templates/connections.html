@@ -75,7 +75,8 @@
                                 <div class="form-text">Leer lassen, um das bestehende Secret beizubehalten.</div>
                             </div>
                         </div>
-                        <div class="d-flex justify-content-end mt-4">
+                        <div class="d-flex justify-content-end gap-2 mt-4">
+                            <button id="testConnection" type="button" class="btn btn-outline-primary">Verbindung testen</button>
                             <button id="saveConnection" type="submit" class="btn btn-primary" th:disabled="${!encryptionConfigured}">Verschlüsselt speichern</button>
                         </div>
                     </form>

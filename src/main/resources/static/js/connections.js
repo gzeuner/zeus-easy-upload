@@ -3,6 +3,7 @@
     const list = document.getElementById('connectionList');
     const status = document.getElementById('connectionStatus');
     const newButton = document.getElementById('newConnection');
+    const testButton = document.getElementById('testConnection');
     const fields = {
         name: document.getElementById('connectionName'),
         type: document.getElementById('connectionType'),
@@ -80,6 +81,36 @@
             await loadProfiles();
         } catch (error) { showStatus(error.message, 'danger'); }
     });
+
+    if (testButton) {
+        testButton.addEventListener('click', async () => {
+            const name = fields.name.value.trim();
+            if (!name) {
+                showStatus('Bitte zuerst ein gespeichertes Profil laden oder den Namen angeben.', 'warning');
+                return;
+            }
+            showStatus('Verbindung wird getestet …', 'info');
+            try {
+                const response = await fetch(`/api/connections/${encodeURIComponent(name)}/test`, { method: 'POST' });
+                const body = await response.json().catch(() => ({}));
+                if (response.status === 404) {
+                    showStatus('Profil nicht gefunden. Bitte zuerst speichern.', 'warning');
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(body.message || `Test fehlgeschlagen (${response.status})`);
+                }
+                if (body.success) {
+                    const product = body.databaseProductName ? ` (${body.databaseProductName})` : '';
+                    showStatus(`OK: ${body.message}${product} — ${body.durationMs} ms`, 'success');
+                } else {
+                    showStatus(body.message || 'Verbindungstest fehlgeschlagen.', 'danger');
+                }
+            } catch (error) {
+                showStatus(error.message, 'danger');
+            }
+        });
+    }
 
     newButton.addEventListener('click', resetForm);
     loadProfiles().catch(error => showStatus(error.message, 'danger'));

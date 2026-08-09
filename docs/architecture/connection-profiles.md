@@ -33,6 +33,7 @@ must be backed up and rotated through an explicit migration process.
 - `GET /api/connections/{name}` — load metadata without secrets
 - `POST /api/connections` — validate and save a profile
 - `DELETE /api/connections/{name}` — delete a profile
+- `POST /api/connections/{name}/test` — JDBC connectivity test (no secrets in response)
 
 An empty credential field in the GUI preserves an existing encrypted secret.
 Endpoint URLs must not contain embedded credentials or URI fragments. JDBC
