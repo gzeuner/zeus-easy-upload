@@ -105,10 +105,21 @@ public class ImportService {
 
             ensureSchemaExists(connection, session.dialect(), request.getLibrary());
 
+            boolean exists = tableExists(connection, session.dialect(), request.getLibrary(), request.getTableName());
+            if (exists && !request.isDropAndRecreate()) {
+                String message = "Table "
+                        + request.getLibrary() + "." + request.getTableName()
+                        + " already exists. Enable \"Drop table before create\", "
+                        + "choose another table name, or use import mode \"In vorhandene Tabelle schreiben\".";
+                errors.add(new ParseError(0, request.getTableName(), "", message));
+                return ImportResult.failure(message, createSql, errors);
+            }
+
             if (request.isDropAndRecreate()) {
-                try (PreparedStatement drop = connection.prepareStatement(
-                        ddl.dropTableSql(request.getLibrary(), request.getTableName()))) {
+                String dropSql = ddl.dropTableIfExistsSql(request.getLibrary(), request.getTableName());
+                try (PreparedStatement drop = connection.prepareStatement(dropSql)) {
                     drop.executeUpdate();
+                    log.info("Dropped table {}.{} before recreate", request.getLibrary(), request.getTableName());
                 } catch (SQLException ex) {
                     log.info("DROP TABLE ignored: {}", ex.getMessage());
                 }
@@ -133,8 +144,9 @@ public class ImportService {
         } catch (ImportException ex) {
             return ImportResult.failure(ex.getMessage(), createSql, ex.getErrors());
         } catch (Exception ex) {
-            errors.add(new ParseError(0, "", "", ex.getMessage()));
-            return ImportResult.failure("Import failed: " + ex.getMessage(), createSql, errors);
+            String friendly = friendlyCreateError(ex, request);
+            errors.add(new ParseError(0, "", "", friendly));
+            return ImportResult.failure("Import failed: " + friendly, createSql, errors);
         }
     }
 
@@ -1004,5 +1016,37 @@ public class ImportService {
             statement.executeUpdate();
             log.debug("Ensured schema/library exists: {}", library);
         }
+    }
+
+    private boolean tableExists(Connection connection, SqlDialect dialect, String library, String table)
+            throws SQLException {
+        if (!StringUtils.hasText(library) || !StringUtils.hasText(table)) {
+            return false;
+        }
+        String schema = dialect.normalizeIdentifier(library);
+        String tableName = dialect.normalizeIdentifier(table);
+        java.sql.DatabaseMetaData meta = connection.getMetaData();
+        try (java.sql.ResultSet rs = meta.getTables(null, schema, tableName, new String[]{"TABLE"})) {
+            if (rs.next()) {
+                return true;
+            }
+        }
+        // Some drivers return unquoted/mixed-case names; retry with uppercase pattern.
+        try (java.sql.ResultSet rs = meta.getTables(null, schema.toUpperCase(Locale.ROOT),
+                tableName.toUpperCase(Locale.ROOT), new String[]{"TABLE"})) {
+            return rs.next();
+        }
+    }
+
+    private String friendlyCreateError(Exception ex, ImportRequest request) {
+        String msg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+        String lower = msg.toLowerCase(Locale.ROOT);
+        if (lower.contains("already exists") || lower.contains("besteht bereits") || lower.contains("42101")) {
+            return "Table "
+                    + (request == null ? "" : request.getLibrary() + "." + request.getTableName())
+                    + " already exists. Enable \"Drop table before create\", "
+                    + "use another table name, or switch to existing-table import mode. Original: " + msg;
+        }
+        return msg;
     }
 }

@@ -32,6 +32,22 @@ public interface SqlDialect {
     }
 
     /**
+     * DROP TABLE statement. Dialects that support {@code IF EXISTS} should override.
+     */
+    default String dropTableSql(String libraryOrSchema, String table) {
+        return "DROP TABLE " + qualifyTable(libraryOrSchema, table);
+    }
+
+    default String dropTableIfExistsSql(String libraryOrSchema, String table) {
+        return "DROP TABLE IF EXISTS " + qualifyTable(libraryOrSchema, table);
+    }
+
+    /** Whether {@link #dropTableIfExistsSql} is reliable on this engine. */
+    default boolean supportsDropIfExists() {
+        return false;
+    }
+
+    /**
      * Normalize a raw identifier according to this dialect's policy
      * (case, charset, empty fallback) without length truncation.
      */

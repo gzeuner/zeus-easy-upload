@@ -25,6 +25,11 @@ public class PostgresDialect extends AbstractSqlDialect {
     }
 
     @Override
+    public boolean supportsDropIfExists() {
+        return true;
+    }
+
+    @Override
     public int maxDecimalPrecision() {
         return 38;
     }

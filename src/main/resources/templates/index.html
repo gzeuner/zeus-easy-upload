@@ -97,8 +97,13 @@
                             </div>
                         </div>
                         <div class="form-check mb-4" id="dropAndRecreateGroup">
-                            <input class="form-check-input" type="checkbox" id="dropAndRecreate" name="dropAndRecreate">
-                            <label class="form-check-label" for="dropAndRecreate">Drop table before create</label>
+                            <input class="form-check-input" type="checkbox" id="dropAndRecreate" name="dropAndRecreate" value="true">
+                            <label class="form-check-label" for="dropAndRecreate">
+                                Drop table before create
+                                <span class="text-muted small d-block">
+                                    Required if the table name already exists (e.g. re-import into TESTDATA).
+                                </span>
+                            </label>
                         </div>
                         <div class="card border-0 bg-light mb-4 d-none" id="existingTableGroup">
                             <div class="card-body">

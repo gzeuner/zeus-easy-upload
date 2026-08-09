@@ -174,6 +174,46 @@ class H2CrudLifecycleIntegrationTest {
     }
 
     @Test
+    void createFailsClearlyWhenTableExistsWithoutDropAndRecreate() {
+        ImportRequest first = new ImportRequest();
+        first.setLibrary(LIBRARY);
+        first.setTableName("H2_EXISTS_GUARD");
+        first.setDropAndRecreate(true);
+        first.setColumns(List.of(proposal("ID", "INTEGER", false), proposal("NAME", "VARCHAR", true)));
+        first.getColumns().get(1).setLength(32);
+        ParsedCsv csv = rowsCsv(List.of("id", "name"), List.of(List.of("1", "A")));
+        assertThat(importService.importCsv(first, csv).isSuccess()).isTrue();
+
+        ImportRequest second = new ImportRequest();
+        second.setLibrary(LIBRARY);
+        second.setTableName("H2_EXISTS_GUARD");
+        second.setDropAndRecreate(false);
+        second.setColumns(List.of(proposal("ID", "INTEGER", false), proposal("NAME", "VARCHAR", true)));
+        second.getColumns().get(1).setLength(32);
+
+        ImportResult result = importService.importCsv(second, csv);
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).containsIgnoringCase("already exists");
+        assertThat(result.getMessage()).containsIgnoringCase("Drop table");
+    }
+
+    @Test
+    void dropAndRecreateAllowsCreateOnExistingTable() {
+        ImportRequest request = new ImportRequest();
+        request.setLibrary(LIBRARY);
+        request.setTableName("H2_RECREATE_OK");
+        request.setDropAndRecreate(true);
+        request.setColumns(List.of(proposal("ID", "INTEGER", false), proposal("NAME", "VARCHAR", true)));
+        request.getColumns().get(1).setLength(32);
+        ParsedCsv csv = rowsCsv(List.of("id", "name"), List.of(List.of("1", "A"), List.of("2", "B")));
+
+        assertThat(importService.importCsv(request, csv).isSuccess()).isTrue();
+        ImportResult again = importService.importCsv(request, csv);
+        assertThat(again.isSuccess()).as(again.getMessage()).isTrue();
+        assertThat(again.getInsertedRows()).isEqualTo(2);
+    }
+
+    @Test
     void createTableAutoCreatesMissingSchemaOnH2() {
         String library = "AUTO_SCHEMA_LIB";
         String table = "H2_AUTO_SCHEMA";
