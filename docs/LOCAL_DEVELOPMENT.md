@@ -56,7 +56,10 @@ mvn test
 ```
 
 Default unit/integration tests use the `test` Spring profile and an in-memory H2
-database. No IBM i connection is required. Coverage includes:
+database. No IBM i connection is required. Browser E2E tests (`*E2ETest`) are
+**excluded** from the default run so CI stays fast.
+
+Coverage includes:
 
 - CREATE TABLE + batch INSERT (`ImportService`, CSV import)
 - INSERT into existing table
@@ -67,13 +70,45 @@ database. No IBM i connection is required. Coverage includes:
 
 IBM i live tests remain opt-in; see [IBM_I_INTEGRATION.md](IBM_I_INTEGRATION.md).
 
+## Browser E2E (Playwright)
+
+Full UI flows (CSV upload → preview → create/existing import → result, connections
+page including **Verbindung testen** for JDBC H2 and REST self-check) run with
+[Playwright for Java](https://playwright.dev/java/) against an embedded Spring Boot
+server (profile `test` / in-memory H2).
+
+**Why Playwright?** The app is multipage Thymeleaf with file upload, radios,
+checkboxes, and client-side table loading — real browser coverage catches
+session/form wiring that MockMvc does not. Playwright is a better fit here than
+Selenium (less flaky, auto waits, first-class file upload) and stays in the
+Maven/JUnit world (no separate Node e2e project required).
+
+```bash
+# First time only: download Chromium (~150 MB)
+mvn -DskipTests exec:java -Dexec.classpathScope=test \
+  -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+
+# Run only *E2ETest
+mvn -Pe2e test
+```
+
+Optional:
+
+| Env | Effect |
+|-----|--------|
+| `E2E_HEADLESS=false` | Show the browser window |
+| `E2E_SLOW_MO=250` | Slow actions (ms) for debugging |
+
+Test sources: `src/test/java/com/zeus/upload/e2e/`.
+
 ## Profiles at a glance
 
-| Spring profile | Database | Dialect | Typical use |
-|----------------|----------|---------|-------------|
+| Spring / Maven profile | Database | Dialect | Typical use |
+|------------------------|----------|---------|-------------|
 | *(default)* | IBM i via env JDBC settings | `Db2iDialect` | Real system |
 | `local` | File H2 under `.local/h2` | `H2Dialect` | Offline development |
 | `test` | In-memory H2 | `H2Dialect` | `mvn test` |
+| Maven `-Pe2e` | In-memory H2 + Chromium | `H2Dialect` | Browser E2E (`*E2ETest`) |
 | `it` | Env-driven (usually IBM i) | `Db2iDialect` | Optional live IT |
 
 ## Switching back to IBM i

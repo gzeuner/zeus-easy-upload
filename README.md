@@ -193,6 +193,17 @@ benoetigt kein IBM i. Abgedeckt sind u. a.:
 mvn test
 ```
 
+Browser-E2E (Playwright, opt-in — nicht im Default-`mvn test`):
+
+```bash
+# einmalig Chromium installieren
+mvn -DskipTests exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+# UI-Flows: Create, Drop/Recreate, Existing-Table, Connections
+mvn -Pe2e test
+```
+
+Details: [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md#browser-e2e-playwright).
+
 Optionale Live-Tests gegen IBM i: [docs/IBM_I_INTEGRATION.md](docs/IBM_I_INTEGRATION.md).
 
 ## Screenshots

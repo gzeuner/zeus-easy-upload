@@ -20,6 +20,9 @@
         <java.version>17</java.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <jt400.version>21.0.4</jt400.version>
+        <playwright.version>1.51.0</playwright.version>
+        <!-- Default: skip browser E2E (needs Chromium). Enable with -Pe2e -->
+        <e2e.tests.skip>true</e2e.tests.skip>
     </properties>
 
     <dependencies>
@@ -70,6 +73,13 @@
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Browser E2E (Playwright). Used by *E2ETest only; enabled via -Pe2e. -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>${playwright.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Runtime scope: used by spring.profiles.active=local and tests; unused against IBM i. -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -97,6 +107,16 @@
                     <release>${java.version}</release>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Browser E2E is opt-in (profile e2e) — keeps default CI/unit runs fast. -->
+                    <excludes>
+                        <exclude>**/*E2ETest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
@@ -121,6 +141,31 @@
                         <configuration>
                             <systemPropertyVariables>
                                 <spring.profiles.active>${spring.profiles.active}</spring.profiles.active>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Full browser E2E with Playwright against Spring Boot (H2 test profile).
+             First run downloads Chromium. Usage: mvn -Pe2e test -->
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <e2e.tests.skip>false</e2e.tests.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes combine.self="override"/>
+                            <includes>
+                                <include>**/*E2ETest.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <spring.profiles.active>test</spring.profiles.active>
                             </systemPropertyVariables>
                         </configuration>
                     </plugin>

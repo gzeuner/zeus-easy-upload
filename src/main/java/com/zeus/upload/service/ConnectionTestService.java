@@ -65,13 +65,22 @@ public class ConnectionTestService {
                 return testRest(profile, started);
             }
             return testJdbc(profile, started);
-        } catch (NoSuchFileException ex) {
+        } catch (NoSuchFileException | java.io.FileNotFoundException ex) {
             return ConnectionTestResult.failure(
                     connectionName, null, null, "Connection profile not found.", System.currentTimeMillis() - started);
         } catch (IOException ex) {
+            // Defensive: some IO paths still surface missing files as generic IOException.
+            String detail = sanitize(ex.getMessage());
+            if (detail.toLowerCase(Locale.ROOT).contains("no such file")
+                    || detail.toLowerCase(Locale.ROOT).contains("cannot find")
+                    || detail.toLowerCase(Locale.ROOT).contains("not found")) {
+                return ConnectionTestResult.failure(
+                        connectionName, null, null, "Connection profile not found.",
+                        System.currentTimeMillis() - started);
+            }
             return ConnectionTestResult.failure(
                     connectionName, null, null,
-                    "Could not load connection profile: " + sanitize(ex.getMessage()),
+                    "Could not load connection profile: " + detail,
                     System.currentTimeMillis() - started);
         } catch (Exception ex) {
             log.warn("Connection test failed for profile '{}': {}", connectionName, sanitize(ex.getMessage()));
