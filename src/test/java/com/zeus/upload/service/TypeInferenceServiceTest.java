@@ -31,6 +31,18 @@ class TypeInferenceServiceTest {
     }
 
     @Test
+    void shouldSizeDecimalToFitLargestIntegerPartIncludingTrailingZeros() {
+        // Regression: stripTrailingZeros used to turn 1500.00 into 1.5E+3 and yield DECIMAL(5,2).
+        ColumnProposal proposal = service.inferColumn(
+                0, "amount", "AMOUNT", List.of("123.45", "99,90", "1500.00", "-12.50"));
+        assertThat(proposal.getSqlType()).isEqualTo("DECIMAL");
+        assertThat(proposal.getScale()).isEqualTo(2);
+        // 1500.00 needs 4 integer digits + scale 2 => at least DECIMAL(6,2); headroom may add 1
+        assertThat(proposal.getPrecision()).isGreaterThanOrEqualTo(6);
+        assertThat(proposal.getPrecision() - proposal.getScale()).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
     void shouldInferDate() {
         ColumnProposal proposal = service.inferColumn(0, "d", "D", List.of("2025-01-01", "02.01.2025", "03/01/2025"));
         assertThat(proposal.getSqlType()).isEqualTo("DATE");
