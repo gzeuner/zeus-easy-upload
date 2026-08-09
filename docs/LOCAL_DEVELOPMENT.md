@@ -100,3 +100,5 @@ mvn spring-boot:run
   Example local H2 profile: same URL as `application-local.yaml` or a second mem/file URL.
   PostgreSQL: type `POSTGRES`, endpoint `jdbc:postgresql://localhost:5432/db` (driver included).
 - **Verbindung testen** on `/connections` works for JDBC and REST profiles.
+- CSV import modes: **create table** (type inference + CREATE/INSERT) or **existing table**
+  (auto-map, type preflight on samples, typed INSERT conversion).

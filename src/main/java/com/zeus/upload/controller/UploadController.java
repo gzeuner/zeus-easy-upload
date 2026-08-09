@@ -141,6 +141,8 @@ public class UploadController {
                         library, existingTableName, request.getConnectionProfileName());
                 List<ColumnMapping> mappings = mappingService.autoMap(parsed, dbColumns);
                 request.setMappings(copyMappings(mappings));
+                MappingValidationResult preflight = mappingService.validate(
+                        parsed, dbColumns, mappings, "INSERT", List.of());
                 previewContext.setDbColumns(dbColumns);
                 previewContext.setMappings(copyMappings(mappings));
                 previewContext.setUseExistingTable(true);
@@ -149,7 +151,11 @@ public class UploadController {
                 previewContext.setKeyColumns(List.of());
                 model.addAttribute("dbColumns", dbColumns);
                 model.addAttribute("mappings", mappings);
+                model.addAttribute("mappingErrors", preflight.getErrors());
+                model.addAttribute("mappingWarnings", preflight.getWarnings());
+                model.addAttribute("importMode", "existing");
             } else {
+                model.addAttribute("importMode", "create");
                 request.setUseExistingTable(false);
                 previewContext.setUseExistingTable(false);
                 previewContext.setExistingTableName(null);

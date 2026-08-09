@@ -62,9 +62,19 @@
                         </div>
                     </div>
                     <div class="col-md-4 d-flex align-items-end mb-3" th:if="${importRequest.useExistingTable}">
-                        <div class="text-muted small">
-                            Existing table import enabled:
-                            <span th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
+                        <div class="small">
+                            <span class="badge text-bg-primary">Existing table INSERT</span>
+                            <div class="text-muted mt-1">
+                                Map &amp; insert into
+                                <span th:text="${importRequest.library + '.' + importRequest.existingTableName}"></span>
+                                with typed conversion
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end mb-3" th:if="${!importRequest.useExistingTable}">
+                        <div class="small">
+                            <span class="badge text-bg-success">Create table + INSERT</span>
+                            <div class="text-muted mt-1">Types inferred from CSV sample</div>
                         </div>
                     </div>
                 </div>
