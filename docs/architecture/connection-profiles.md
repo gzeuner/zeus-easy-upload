@@ -77,9 +77,20 @@ Import, metadata and DB source connectors accept an optional
 Resolution flow:
 
 1. Blank name → Spring bootstrap `DataSource` + default `SqlDialect`
-2. Named profile → decrypt credentials → `ConnectionDataSourceFactory`
-   → `DriverManagerDataSource` → dialect from JDBC URL (fallback connection type)
+2. Named profile → decrypt credentials → `ConnectionPoolCache.getOrCreate`
+   → small **Hikari** pool (max 5) keyed by profile fingerprint
+   → dialect from JDBC URL (fallback connection type)
 3. REST profiles are rejected for JDBC operations
+
+### Pool cache
+
+- `ConnectionPoolCache` reuses pools across import/metadata/test operations
+- Fingerprint = SHA-256 of name, type, endpoint, `updatedAt`, and credentials
+  (digest only — secrets are not stored in the cache key text)
+- Save/delete of a profile invalidates that pool immediately
+- Fingerprint mismatch recreates and closes the previous pool
+- App shutdown (`@PreDestroy`) closes all cached pools
+- Session close does **not** close the shared pool
 
 Credential keys accepted: `username`/`user`, `password`/`secret`. Secrets are
 never logged, never returned by the API and never stored on `ImportRequest`.

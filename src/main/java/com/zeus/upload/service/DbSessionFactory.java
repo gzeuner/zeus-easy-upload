@@ -16,7 +16,8 @@ import org.springframework.util.StringUtils;
 
 /**
  * Opens {@link DbSession}s against the bootstrap Spring DataSource or a named
- * encrypted connection profile. Credentials never leave this factory.
+ * encrypted connection profile (pooled via {@link ConnectionPoolCache}).
+ * Credentials never leave this factory.
  */
 @Service
 public class DbSessionFactory {
@@ -26,20 +27,20 @@ public class DbSessionFactory {
     private final DataSource bootstrapDataSource;
     private final SqlDialect bootstrapDialect;
     private final ConnectionProfileService connectionProfileService;
-    private final ConnectionDataSourceFactory dataSourceFactory;
+    private final ConnectionPoolCache connectionPoolCache;
     private final SqlDialectRegistry dialectRegistry;
 
     public DbSessionFactory(
             DataSource bootstrapDataSource,
             SqlDialect bootstrapDialect,
             ConnectionProfileService connectionProfileService,
-            ConnectionDataSourceFactory dataSourceFactory,
+            ConnectionPoolCache connectionPoolCache,
             SqlDialectRegistry dialectRegistry
     ) {
         this.bootstrapDataSource = Objects.requireNonNull(bootstrapDataSource);
         this.bootstrapDialect = Objects.requireNonNull(bootstrapDialect);
         this.connectionProfileService = Objects.requireNonNull(connectionProfileService);
-        this.dataSourceFactory = Objects.requireNonNull(dataSourceFactory);
+        this.connectionPoolCache = Objects.requireNonNull(connectionPoolCache);
         this.dialectRegistry = Objects.requireNonNull(dialectRegistry);
     }
 
@@ -56,6 +57,7 @@ public class DbSessionFactory {
 
     /**
      * Resolve by optional profile name. Blank/null uses {@link #openDefault()}.
+     * Named sessions share a cached Hikari pool; session close does not shut the pool down.
      */
     public DbSession open(String connectionProfileName) {
         if (!StringUtils.hasText(connectionProfileName)) {
@@ -69,9 +71,10 @@ public class DbSessionFactory {
                         "Connection profile '" + name + "' is REST; select a JDBC/DB2 profile for database operations.");
             }
             Map<String, String> credentials = connectionProfileService.loadCredentials(name);
-            DataSource dataSource = dataSourceFactory.create(profile, credentials);
+            DataSource dataSource = connectionPoolCache.getOrCreate(profile, credentials);
             SqlDialect dialect = resolveDialect(profile);
-            log.info("Opened DB session for connection profile '{}' (product={})", name, dialect.product());
+            log.debug("Opened DB session for connection profile '{}' (product={}, pooled=true)", name, dialect.product());
+            // closer=null: pool is owned by ConnectionPoolCache, not the session.
             return new DbSession(dataSource, dialect, name, dialect.product(), null);
         } catch (IOException ex) {
             throw new IllegalStateException("Could not load connection profile '" + name + "': " + ex.getMessage(), ex);

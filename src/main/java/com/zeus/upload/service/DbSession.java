@@ -7,8 +7,9 @@ import javax.sql.DataSource;
 
 /**
  * Resolved JDBC execution context: DataSource + dialect for one import/metadata operation.
- * Does not expose credentials. Close when the operation finishes (profile sessions may
- * own pooled resources; the bootstrap session is a no-op on close).
+ * Does not expose credentials. Close when the operation finishes.
+ * Named profile sessions use a shared pool from {@link ConnectionPoolCache}; session close
+ * does not shut that pool down (closer is null). Bootstrap sessions are also a no-op on close.
  */
 public final class DbSession implements AutoCloseable {
 

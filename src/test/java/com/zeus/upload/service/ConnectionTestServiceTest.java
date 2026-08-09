@@ -33,8 +33,9 @@ class ConnectionTestServiceTest {
 
         DataSource bootstrap = new DriverManagerDataSource(url, "sa", "");
         var dialect = SqlDialectRegistry.createDefault().resolveFromJdbcUrl(url);
+        var poolCache = new ConnectionPoolCache(new ConnectionDataSourceFactory());
         var sessions = new DbSessionFactory(
-                bootstrap, dialect, profiles, new ConnectionDataSourceFactory(), SqlDialectRegistry.createDefault());
+                bootstrap, dialect, profiles, poolCache, SqlDialectRegistry.createDefault());
         var service = new ConnectionTestService(profiles, sessions);
 
         ConnectionTestResult result = service.test("h2-test");

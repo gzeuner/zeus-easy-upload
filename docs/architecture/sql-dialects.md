@@ -29,6 +29,7 @@ IBM i remains **first-class**. Local development and CI use H2 (`local` / `test`
 - `SqlDialectRegistry` for product resolution
 - `DbSessionFactory` opens a `DbSession` (DataSource + dialect) for either
   the bootstrap DS or a named JDBC connection profile
+- Named profiles use `ConnectionPoolCache` (Hikari pools, fingerprint invalidation)
 - `ImportService`, `JdbcMetadataService` and DB source connectors use sessions
 
 Per-connection details: [connection-profiles.md](connection-profiles.md).

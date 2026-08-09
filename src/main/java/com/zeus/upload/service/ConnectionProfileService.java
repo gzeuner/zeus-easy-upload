@@ -28,19 +28,34 @@ public class ConnectionProfileService {
     private final ObjectMapper objectMapper;
     private final ConnectionCryptoService cryptoService;
     private final Path connectionDirectory;
+    private final ConnectionPoolCache connectionPoolCache;
 
     @Autowired
-    public ConnectionProfileService(ObjectMapper objectMapper, AppProperties appProperties,
-                                    ConnectionCryptoService cryptoService) {
-        this(objectMapper, Path.of(appProperties.getConnectionProfileDirectory()), cryptoService);
+    public ConnectionProfileService(
+            ObjectMapper objectMapper,
+            AppProperties appProperties,
+            ConnectionCryptoService cryptoService,
+            ConnectionPoolCache connectionPoolCache
+    ) {
+        this(objectMapper, Path.of(appProperties.getConnectionProfileDirectory()), cryptoService, connectionPoolCache);
     }
 
     ConnectionProfileService(ObjectMapper objectMapper, Path connectionDirectory,
                              ConnectionCryptoService cryptoService) {
+        this(objectMapper, connectionDirectory, cryptoService, null);
+    }
+
+    ConnectionProfileService(
+            ObjectMapper objectMapper,
+            Path connectionDirectory,
+            ConnectionCryptoService cryptoService,
+            ConnectionPoolCache connectionPoolCache
+    ) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.connectionDirectory = Objects.requireNonNull(connectionDirectory, "connectionDirectory must not be null")
                 .toAbsolutePath().normalize();
         this.cryptoService = Objects.requireNonNull(cryptoService, "cryptoService must not be null");
+        this.connectionPoolCache = connectionPoolCache;
     }
 
     public ConnectionProfile save(ConnectionProfileRequest request) throws IOException {
@@ -73,6 +88,7 @@ public class ConnectionProfileService {
         } finally {
             Files.deleteIfExists(temporary);
         }
+        invalidatePool(safeName);
         return profile;
     }
 
@@ -102,7 +118,15 @@ public class ConnectionProfileService {
     }
 
     public void delete(String name) throws IOException {
-        Files.deleteIfExists(profilePath(validateName(name)));
+        String safeName = validateName(name);
+        Files.deleteIfExists(profilePath(safeName));
+        invalidatePool(safeName);
+    }
+
+    private void invalidatePool(String profileName) {
+        if (connectionPoolCache != null) {
+            connectionPoolCache.invalidate(profileName);
+        }
     }
 
     private StoredConnectionProfile readStored(Path path) throws IOException {
