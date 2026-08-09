@@ -59,10 +59,14 @@ public class SqlDialectRegistry {
     }
 
     public SqlDialect resolveFromConnectionType(ConnectionType type) {
-        if (type == ConnectionType.DB2_400) {
-            return get(DatabaseProduct.DB2_I);
+        if (type == null) {
+            return get(DatabaseProduct.GENERIC_JDBC);
         }
-        return get(DatabaseProduct.GENERIC_JDBC);
+        return switch (type) {
+            case DB2_400 -> get(DatabaseProduct.DB2_I);
+            case POSTGRES -> get(DatabaseProduct.POSTGRES);
+            case REST -> get(DatabaseProduct.GENERIC_JDBC);
+        };
     }
 
     /**

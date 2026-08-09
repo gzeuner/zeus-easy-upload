@@ -10,7 +10,7 @@ Hibernate entities; dialects own product-specific SQL.
 |-------------------|---------|------------------|--------|
 | `DB2_I` | `Db2iDialect` | `jdbc:as400://…` | `MERGE … USING (VALUES …)` |
 | `H2` | `H2Dialect` | `jdbc:h2:…` | unsupported (use INSERT/UPDATE/DELETE) |
-| `POSTGRES` | `PostgresDialect` | `jdbc:postgresql://…` | `INSERT … ON CONFLICT` |
+| `POSTGRES` | `PostgresDialect` | `jdbc:postgresql://…` (driver on runtime classpath) | `INSERT … ON CONFLICT` |
 | `GENERIC_JDBC` | `GenericJdbcDialect` | other `jdbc:…` | unsupported |
 
 IBM i remains **first-class**. Local development and CI use H2 (`local` / `test` profiles).

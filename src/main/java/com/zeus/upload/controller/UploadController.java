@@ -256,7 +256,7 @@ public class UploadController {
     private List<ConnectionProfile> listJdbcConnections() {
         try {
             return connectionProfileService.list().stream()
-                    .filter(profile -> profile.getType() == ConnectionType.DB2_400)
+                    .filter(profile -> profile.getType() != null && profile.getType().isJdbc())
                     .toList();
         } catch (IOException ex) {
             log.warn("Could not list connection profiles: {}", ex.getMessage());

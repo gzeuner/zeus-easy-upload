@@ -94,7 +94,9 @@ mvn spring-boot:run
 - DB2-style `MERGE ... USING (VALUES ...)` (upsert) is **not** supported on the H2 dialect; UPDATE/INSERT/DELETE paths are preferred for local work. Upsert remains IBM i (and PostgreSQL `ON CONFLICT`) oriented.
 - Schema/libraries: H2 auto-creates missing schemas on CREATE TABLE; IBM i libraries must already exist.
 - Multi-DB direction: expand `SqlDialect` / `SqlDialectRegistry` (not Hibernate). See [architecture/sql-dialects.md](architecture/sql-dialects.md).
-- Named JDBC connection profiles (type DB2_400, endpoint `jdbc:…`) can target
-  a separate DataSource per import/metadata call. Create them under
+- Named JDBC connection profiles (`DB2_400` / `POSTGRES`, endpoint `jdbc:…`) can
+  target a separate pooled DataSource per import/metadata call. Create them under
   `/connections` with credentials encrypted; pick them on the import form.
-  Example local profile endpoint: same H2 URL as `application-local.yaml` or a second mem/file URL.
+  Example local H2 profile: same URL as `application-local.yaml` or a second mem/file URL.
+  PostgreSQL: type `POSTGRES`, endpoint `jdbc:postgresql://localhost:5432/db` (driver included).
+- **Verbindung testen** on `/connections` works for JDBC and REST profiles.

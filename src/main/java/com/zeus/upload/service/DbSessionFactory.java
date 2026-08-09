@@ -1,7 +1,6 @@
 package com.zeus.upload.service;
 
 import com.zeus.upload.domain.ConnectionProfile;
-import com.zeus.upload.domain.ConnectionType;
 import com.zeus.upload.sql.DatabaseProduct;
 import com.zeus.upload.sql.SqlDialect;
 import com.zeus.upload.sql.SqlDialectRegistry;
@@ -66,9 +65,9 @@ public class DbSessionFactory {
         String name = connectionProfileName.trim();
         try {
             ConnectionProfile profile = connectionProfileService.load(name);
-            if (profile.getType() == ConnectionType.REST) {
+            if (profile.getType() == null || !profile.getType().isJdbc()) {
                 throw new IllegalArgumentException(
-                        "Connection profile '" + name + "' is REST; select a JDBC/DB2 profile for database operations.");
+                        "Connection profile '" + name + "' is not a JDBC profile; select DB2_400 or POSTGRES.");
             }
             Map<String, String> credentials = connectionProfileService.loadCredentials(name);
             DataSource dataSource = connectionPoolCache.getOrCreate(profile, credentials);
@@ -93,9 +92,6 @@ public class DbSessionFactory {
         if (fromUrl != DatabaseProduct.GENERIC_JDBC) {
             return dialectRegistry.get(fromUrl);
         }
-        if (profile.getType() == ConnectionType.DB2_400) {
-            return dialectRegistry.get(DatabaseProduct.DB2_I);
-        }
-        return dialectRegistry.get(DatabaseProduct.GENERIC_JDBC);
+        return dialectRegistry.resolveFromConnectionType(profile.getType());
     }
 }
